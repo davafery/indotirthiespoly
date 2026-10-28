@@ -1,44 +1,46 @@
 /**
- * Konohapoly - 3D Scene Engine using Three.js
+ * Konohapoly - 3D Scene Engine (Three.js)
  */
 import * as THREE from 'three';
 import { BOARD, GROUPS } from './engine.js';
 
 export class GameScene {
-  constructor(containerEl) {
-    this.container = containerEl;
+  constructor(container) {
+    this.container = container;
     this.scene = null;
     this.camera = null;
     this.renderer = null;
-
-    this.tileMeshes = [];
-    this.playerTokens = [];
-    this.buildingMeshes = {};
     
-    // Camera follow state
-    this.followTarget = null;
-    this.isFollowing = true;
-    this.userInteractedTimer = null;
+    this.tilesMesh = [];
+    this.pawnsMesh = [];
+    this.buildingsMesh = {}; // tileId -> mesh
+    this.diceMeshes = [];
+    
+    this.cameraMode = 'follow'; // 'follow' | 'overview'
+    this.targetCameraPos = new THREE.Vector3();
+    this.targetLookAt = new THREE.Vector3();
+    this.activePawnPos = new THREE.Vector3();
+    
+    this.isRollingDice = false;
+    this.diceAnimTime = 0;
+    this.targetD1 = 1;
+    this.targetD2 = 1;
 
     this.init();
   }
 
   init() {
-    const width = this.container.clientWidth || window.innerWidth;
-    const height = this.container.clientHeight || 500;
-
-    // 1. Scene Setup
+    // 1. Setup Scene & Renderer
     this.scene = new THREE.Scene();
-    this.scene.background = new THREE.Color(0x87ceeb); // Gradasi langit
-    this.scene.fog = new THREE.FogExp2(0x87ceeb, 0.012);
+    this.scene.background = new THREE.Color('#1a1c23');
+    this.scene.fog = new THREE.FogExp2('#1a1c23', 0.012);
 
-    // 2. Camera Setup (Perspective FOV 24, Isometric Look)
+    const width = this.container.clientWidth || window.innerWidth;
+    const height = this.container.clientHeight || window.innerHeight;
+
     this.camera = new THREE.PerspectiveCamera(24, width / height, 0.1, 1000);
-    this.camera.position.set(35, 45, 55);
-    this.camera.lookAt(0, 0, 0);
-
-    // 3. Renderer Setup
-    this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+    
+    this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
     this.renderer.setSize(width, height);
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
     this.renderer.shadowMap.enabled = true;
@@ -46,11 +48,11 @@ export class GameScene {
 
     this.container.appendChild(this.renderer.domElement);
 
-    // 4. Lighting
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.75);
+    // 2. Lighting
+    const ambientLight = new THREE.AmbientLight('#ffffff', 0.8);
     this.scene.add(ambientLight);
 
-    const dirLight = new THREE.DirectionalLight(0xfffaed, 1.2);
+    const dirLight = new THREE.DirectionalLight('#fff0dd', 1.5);
     dirLight.position.set(30, 50, 20);
     dirLight.castShadow = true;
     dirLight.shadow.mapSize.width = 1024;
@@ -63,233 +65,293 @@ export class GameScene {
     dirLight.shadow.camera.bottom = -30;
     this.scene.add(dirLight);
 
-    // 5. Environment & Papan Game
-    this.createEnvironment();
+    // 3. World & Environment
+    this.createArchipelago();
     this.createBoard();
+    this.createPawns();
+    this.create3DDice();
 
-    // 6. Resize Handler
+    // 4. Resize Listener
     window.addEventListener('resize', () => this.onWindowResize());
 
-    // 7. Render Loop
+    // 5. Render Loop
     this.animate();
   }
 
-  createEnvironment() {
+  createArchipelago() {
     // Air Laut
-    const oceanGeo = new THREE.PlaneGeometry(300, 300);
-    const oceanMat = new THREE.MeshLambertMaterial({ color: 0x1d70a2 });
-    const ocean = new THREE.Mesh(oceanGeo, oceanMat);
-    ocean.rotation.x = -Math.PI / 2;
-    ocean.position.y = -1.2;
-    this.scene.add(ocean);
+    const seaGeo = new THREE.PlaneGeometry(300, 300);
+    const seaMat = new THREE.MeshStandardMaterial({ color: '#004f77', roughness: 0.1, metalness: 0.1 });
+    const sea = new THREE.Mesh(seaGeo, seaMat);
+    sea.rotation.x = -Math.PI / 2;
+    sea.position.y = -1.2;
+    this.scene.add(sea);
 
-    // Pulau Tengah Nusantara
-    const islandGeo = new THREE.CylinderGeometry(18, 22, 1.5, 32);
-    const islandMat = new THREE.MeshLambertMaterial({ color: 0x3a8c3f });
+    // Pulau Utama Tengah
+    const islandGeo = new THREE.BoxGeometry(34, 1, 34);
+    const islandMat = new THREE.MeshStandardMaterial({ color: '#2b580c', roughness: 0.8 });
     const island = new THREE.Mesh(islandGeo, islandMat);
-    island.position.y = -0.75;
+    island.position.y = -0.5;
     island.receiveShadow = true;
     this.scene.add(island);
 
-    // Monas Mini di Pusat Pulau
-    const monasBase = new THREE.Mesh(
-      new THREE.BoxGeometry(2, 0.8, 2),
-      new THREE.MeshLambertMaterial({ color: 0xeeeeee })
-    );
-    monasBase.position.set(0, 0.4, 0);
-    monasBase.castShadow = true;
-    this.scene.add(monasBase);
+    // Monas Mini di Tengah Papan
+    const monasGroup = new THREE.Group();
+    const baseGeo = new THREE.BoxGeometry(3, 0.6, 3);
+    const baseMat = new THREE.MeshStandardMaterial({ color: '#e0e0e0' });
+    const base = new THREE.Mesh(baseGeo, baseMat);
 
-    const monasTower = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.2, 0.5, 5, 8),
-      new THREE.MeshLambertMaterial({ color: 0xffffff })
-    );
-    monasTower.position.set(0, 3, 0);
-    monasTower.castShadow = true;
-    this.scene.add(monasTower);
+    const towerGeo = new THREE.CylinderGeometry(0.2, 0.4, 5, 8);
+    const tower = new THREE.Mesh(towerGeo, baseMat);
+    tower.position.y = 2.8;
 
-    const monasGold = new THREE.Mesh(
-      new THREE.ConeGeometry(0.3, 0.8, 8),
-      new THREE.MeshLambertMaterial({ color: 0xf2b705 })
-    );
-    monasGold.position.set(0, 5.8, 0);
-    this.scene.add(monasGold);
+    const goldGeo = new THREE.ConeGeometry(0.3, 0.8, 8);
+    const goldMat = new THREE.MeshStandardMaterial({ color: '#f2b705', metalness: 0.8, roughness: 0.2 });
+    const gold = new THREE.Mesh(goldGeo, goldMat);
+    gold.position.y = 5.5;
+
+    monasGroup.add(base, tower, gold);
+    monasGroup.position.set(0, 0, 0);
+    this.scene.add(monasGroup);
   }
 
   getTilePosition(index) {
-    // Menghitung koordinat XZ untuk 40 petak melingkar persegi (10 petak per sisi)
-    const sideSize = 10;
-    const spacing = 2.4;
-    const offset = (sideSize * spacing) / 2;
-
-    let x = 0;
-    let z = 0;
-
+    // Papan 11 x 11 petak (0 s/d 39 searah jarum jam, START di kiri-bawah (-13, 13))
+    const size = 11;
+    const spacing = 2.6;
+    const half = (size - 1) / 2; // 5
+    
+    let x = 0, z = 0;
     if (index >= 0 && index <= 10) {
-      // Sisi Bawah (0..10): dari kiri ke kanan
-      x = -offset + index * spacing;
-      z = offset;
+      x = -half * spacing;
+      z = (half - index) * spacing;
     } else if (index > 10 && index <= 20) {
-      // Sisi Kanan (10..20): dari bawah ke atas
-      x = offset;
-      z = offset - (index - 10) * spacing;
+      x = (-half + (index - 10)) * spacing;
+      z = -half * spacing;
     } else if (index > 20 && index <= 30) {
-      // Sisi Atas (20..30): dari kanan ke kiri
-      x = offset - (index - 20) * spacing;
-      z = -offset;
+      x = half * spacing;
+      z = (-half + (index - 20)) * spacing;
     } else {
-      // Sisi Kiri (30..39): dari atas ke bawah
-      x = -offset;
-      z = -offset + (index - 30) * spacing;
+      x = (half - (index - 30)) * spacing;
+      z = half * spacing;
     }
-
     return { x, y: 0, z };
   }
 
   createBoard() {
+    const tileGeo = new THREE.BoxGeometry(2.4, 0.4, 2.4);
+
     BOARD.forEach((tile) => {
       const pos = this.getTilePosition(tile.id);
+      
+      let color = '#d3c399'; // Krem dasar
+      if (tile.type === 'prop' && tile.group && GROUPS[tile.group]) {
+        color = GROUPS[tile.group].color;
+      } else if (tile.type === 'trans') color = '#333333';
+      else if (tile.type === 'start') color = '#22a55b';
+      else if (tile.type === 'ciduk' || tile.type === 'jail') color = '#e63946';
 
-      // Warna Cap Petak
-      let capColor = 0xe0d6c3; // Krem default
-      if (tile.group && GROUPS[tile.group]) {
-        capColor = parseInt(GROUPS[tile.group].color.replace('#', '0x'));
-      }
+      const mat = new THREE.MeshStandardMaterial({ color, roughness: 0.5 });
+      const mesh = new THREE.Mesh(tileGeo, mat);
+      mesh.position.set(pos.x, pos.y, pos.z);
+      mesh.receiveShadow = true;
+      mesh.castShadow = true;
 
-      // Base Petak
-      const baseGeo = new THREE.BoxGeometry(2.2, 0.6, 2.2);
-      const baseMat = new THREE.MeshLambertMaterial({ color: 0x2b2b36 });
-      const tileMesh = new THREE.Mesh(baseGeo, baseMat);
-      tileMesh.position.set(pos.x, pos.y, pos.z);
-      tileMesh.receiveShadow = true;
-      tileMesh.castShadow = true;
-
-      // Cap Warna Atas
-      const capGeo = new THREE.BoxGeometry(2.1, 0.1, 2.1);
-      const capMat = new THREE.MeshLambertMaterial({ color: capColor });
-      const capMesh = new THREE.Mesh(capGeo, capMat);
-      capMesh.position.set(0, 0.31, 0);
-      tileMesh.add(capMesh);
-
-      // Simpan referensi mesh petak
-      tileMesh.userData = { id: tile.id, data: tile };
-      this.scene.add(tileMesh);
-      this.tileMeshes.push(tileMesh);
+      this.scene.add(mesh);
+      this.tilesMesh.push({ id: tile.id, mesh, defaultColor: color });
     });
   }
 
-  syncGameState(S) {
-    if (!S) return;
+  createPawns() {
+    const colors = ['#e63946', '#1d8cf0', '#f2b705', '#22a55b'];
+    
+    for (let i = 0; i < 4; i++) {
+      const group = new THREE.Group();
+      const bodyGeo = new THREE.CylinderGeometry(0.3, 0.5, 1.2, 16);
+      const headGeo = new THREE.SphereGeometry(0.35, 16, 16);
+      
+      const mat = new THREE.MeshStandardMaterial({ color: colors[i], roughness: 0.2 });
+      
+      const body = new THREE.Mesh(bodyGeo, mat);
+      body.position.y = 0.6;
+      body.castShadow = true;
 
-    // 1. Sync Bidak Pemain
-    S.players.forEach((player, idx) => {
-      if (player.isBankrupt) {
-        if (this.playerTokens[idx]) this.playerTokens[idx].visible = false;
+      const head = new THREE.Mesh(headGeo, mat);
+      head.position.y = 1.3;
+      head.castShadow = true;
+
+      group.add(body, head);
+      
+      const startPos = this.getTilePosition(0);
+      group.position.set(startPos.x + (i % 2) * 0.6 - 0.3, 0.2, startPos.z + Math.floor(i / 2) * 0.6 - 0.3);
+      
+      this.scene.add(group);
+      this.pawnsMesh.push(group);
+    }
+  }
+
+  create3DDice() {
+    const diceGeo = new THREE.BoxGeometry(1.2, 1.2, 1.2);
+    const diceMat = new THREE.MeshStandardMaterial({ color: '#ffffff', roughness: 0.2 });
+
+    for (let i = 0; i < 2; i++) {
+      const dice = new THREE.Mesh(diceGeo, diceMat);
+      dice.castShadow = true;
+      dice.position.set(i === 0 ? -1.2 : 1.2, 3, 0);
+      dice.visible = false;
+      this.scene.add(dice);
+      this.diceMeshes.push(dice);
+    }
+  }
+
+  triggerDiceRoll(d1, d2) {
+    this.targetD1 = d1;
+    this.targetD2 = d2;
+    this.isRollingDice = true;
+    this.diceAnimTime = 0;
+
+    this.diceMeshes.forEach((d, idx) => {
+      d.visible = true;
+      d.position.set(idx === 0 ? -1.5 : 1.5, 4, 0);
+    });
+  }
+
+  updateBuildings(propsState) {
+    Object.keys(propsState).forEach((tileId) => {
+      const pData = propsState[tileId];
+      const pos = this.getTilePosition(Number(tileId));
+
+      // Hapus bangunan lama jika ada
+      if (this.buildingsMesh[tileId]) {
+        this.scene.remove(this.buildingsMesh[tileId]);
+        delete this.buildingsMesh[tileId];
+      }
+
+      if (pData.lvl > 0 && !pData.mortgaged) {
+        const bGroup = new THREE.Group();
+        let bGeo, bMat;
+
+        if (pData.lvl === 1) { // Rumah
+          bGeo = new THREE.BoxGeometry(0.8, 0.8, 0.8);
+          bMat = new THREE.MeshStandardMaterial({ color: '#ffffff' });
+          const bMesh = new THREE.Mesh(bGeo, bMat);
+          bMesh.position.y = 0.6;
+          bMesh.castShadow = true;
+          bGroup.add(bMesh);
+        } else if (pData.lvl === 2) { // Ruko
+          bGeo = new THREE.BoxGeometry(0.9, 1.6, 0.9);
+          bMat = new THREE.MeshStandardMaterial({ color: '#415a77' });
+          const bMesh = new THREE.Mesh(bGeo, bMat);
+          bMesh.position.y = 1.0;
+          bMesh.castShadow = true;
+          bGroup.add(bMesh);
+        } else if (pData.lvl === 3) { // Landmark
+          bGeo = new THREE.CylinderGeometry(0.3, 0.7, 2.4, 8);
+          bMat = new THREE.MeshStandardMaterial({ color: '#f2b705', metalness: 0.6 });
+          const bMesh = new THREE.Mesh(bGeo, bMat);
+          bMesh.position.y = 1.4;
+          bMesh.castShadow = true;
+          bGroup.add(bMesh);
+        }
+
+        bGroup.position.set(pos.x, 0, pos.z);
+        this.scene.add(bGroup);
+        this.buildingsMesh[tileId] = bGroup;
+      }
+
+      // Visual Gadai (Abu-abu)
+      const tileMesh = this.tilesMesh.find(t => t.id === Number(tileId));
+      if (tileMesh) {
+        if (pData.mortgaged) {
+          tileMesh.mesh.material.color.set('#555555');
+        } else {
+          tileMesh.mesh.material.color.set(tileMesh.defaultColor);
+        }
+      }
+    });
+  }
+
+  updateState(gameState) {
+    if (!gameState) return;
+
+    // Update Posisi Bidak
+    gameState.players.forEach((p, idx) => {
+      const pawnMesh = this.pawnsMesh[idx];
+      if (!pawnMesh) return;
+
+      if (p.isBankrupt) {
+        pawnMesh.visible = false;
         return;
       }
 
-      if (!this.playerTokens[idx]) {
-        // Buat Bidak Baru
-        const pColor = parseInt(player.color.replace('#', '0x'));
-        const tokenGeo = new THREE.CylinderGeometry(0.3, 0.5, 1.2, 16);
-        const tokenMat = new THREE.MeshPhongMaterial({ color: pColor, shininess: 80 });
-        const tokenMesh = new THREE.Mesh(tokenGeo, tokenMat);
+      pawnMesh.visible = true;
+      const pos = this.getTilePosition(p.pos);
+      
+      // Offset kecil antar bidak di petak yang sama
+      const offsetX = (idx % 2) * 0.6 - 0.3;
+      const offsetZ = Math.floor(idx / 2) * 0.6 - 0.3;
+      
+      // Interpolasi Pergerakan Bidak
+      pawnMesh.position.x += (pos.x + offsetX - pawnMesh.position.x) * 0.2;
+      pawnMesh.position.z += (pos.z + offsetZ - pawnMesh.position.z) * 0.2;
 
-        const headGeo = new THREE.SphereGeometry(0.4, 16, 16);
-        const headMesh = new THREE.Mesh(headGeo, tokenMat);
-        headMesh.position.y = 0.8;
-        tokenMesh.add(headMesh);
-
-        tokenMesh.castShadow = true;
-        this.scene.add(tokenMesh);
-        this.playerTokens[idx] = tokenMesh;
-      }
-
-      const token = this.playerTokens[idx];
-      token.visible = true;
-
-      // Offset posisi bidak agar tidak menumpuk di petak yang sama
-      const tilePos = this.getTilePosition(player.pos);
-      const offsetX = (idx % 2 === 0 ? 0.35 : -0.35);
-      const offsetZ = (idx < 2 ? 0.35 : -0.35);
-
-      const targetX = tilePos.x + offsetX;
-      const targetZ = tilePos.z + offsetZ;
-      const targetY = 0.9;
-
-      // Animasi pergerakan halus (lerp)
-      token.position.x += (targetX - token.position.x) * 0.2;
-      token.position.z += (targetZ - token.position.z) * 0.2;
-      token.position.y = targetY;
-
-      // Atur Kamera Follow ke Bidak Aktif
-      if (idx === S.turnIdx && this.isFollowing) {
-        this.followTarget = { x: targetX, z: targetZ };
+      // Bidak Aktif untuk Fokus Kamera
+      if (idx === gameState.turnIdx) {
+        this.activePawnPos.set(pos.x, pos.y, pos.z);
       }
     });
 
-    // 2. Sync Bangunan Properti
-    Object.keys(S.props).forEach((tileId) => {
-      const pData = S.props[tileId];
-      const meshKey = `b_${tileId}`;
+    // Update Bangunan
+    this.updateBuildings(gameState.props);
+  }
 
-      if (pData.lvl > 0 && pData.owner !== null) {
-        if (!this.buildingMeshes[meshKey] || this.buildingMeshes[meshKey].userData.lvl !== pData.lvl) {
-          // Hapus bangunan lama jika level berubah
-          if (this.buildingMeshes[meshKey]) {
-            this.scene.remove(this.buildingMeshes[meshKey]);
-          }
-
-          // Buat Bangunan Baru
-          const pos = this.getTilePosition(Number(tileId));
-          let bGeo;
-          let bColor = 0xffffff;
-
-          if (pData.lvl === 1) { // Rumah
-            bGeo = new THREE.BoxGeometry(0.8, 0.6, 0.8);
-            bColor = 0xeeeeee;
-          } else if (pData.lvl === 2) { // Ruko
-            bGeo = new THREE.BoxGeometry(0.9, 1.2, 0.9);
-            bColor = 0x3366cc;
-          } else { // Landmark
-            bGeo = new THREE.BoxGeometry(1.1, 2.0, 1.1);
-            bColor = 0xf2b705;
-          }
-
-          const bMesh = new THREE.Mesh(bGeo, new THREE.MeshLambertMaterial({ color: bColor }));
-          bMesh.position.set(pos.x, 0.6 + (pData.lvl * 0.3), pos.z);
-          bMesh.castShadow = true;
-          bMesh.userData = { lvl: pData.lvl };
-
-          this.scene.add(bMesh);
-          this.buildingMeshes[meshKey] = bMesh;
-        }
-      } else if (this.buildingMeshes[meshKey]) {
-        this.scene.remove(this.buildingMeshes[meshKey]);
-        delete this.buildingMeshes[meshKey];
-      }
-    });
+  toggleCameraMode() {
+    this.cameraMode = this.cameraMode === 'follow' ? 'overview' : 'follow';
+    return this.cameraMode;
   }
 
   animate() {
     requestAnimationFrame(() => this.animate());
 
-    // Camera Smooth Following
-    if (this.isFollowing && this.followTarget) {
-      const camTargetX = this.followTarget.x + 30;
-      const camTargetZ = this.followTarget.z + 40;
+    // 1. Animasi Dadu 3D
+    if (this.isRollingDice) {
+      this.diceAnimTime += 0.05;
+      this.diceMeshes.forEach((d) => {
+        d.rotation.x += 0.3;
+        d.rotation.y += 0.4;
+        d.position.y = 2 + Math.abs(Math.sin(this.diceAnimTime * 5)) * 2;
+      });
 
-      this.camera.position.x += (camTargetX - this.camera.position.x) * 0.05;
-      this.camera.position.z += (camTargetZ - this.camera.position.z) * 0.05;
-      this.camera.lookAt(this.followTarget.x, 0, this.followTarget.z);
+      if (this.diceAnimTime > 1.5) {
+        this.isRollingDice = false;
+        this.diceMeshes.forEach((d) => {
+          d.rotation.set(0, 0, 0);
+          d.position.y = 1.2;
+        });
+        setTimeout(() => {
+          this.diceMeshes.forEach(d => d.visible = false);
+        }, 1000);
+      }
     }
+
+    // 2. Pergerakan Kamera
+    if (this.cameraMode === 'follow') {
+      this.targetCameraPos.set(this.activePawnPos.x + 18, 22, this.activePawnPos.z + 24);
+      this.targetLookAt.copy(this.activePawnPos);
+    } else {
+      this.targetCameraPos.set(0, 42, 38);
+      this.targetLookAt.set(0, 0, 0);
+    }
+
+    this.camera.position.lerp(this.targetCameraPos, 0.05);
+    this.camera.lookAt(this.targetLookAt);
 
     this.renderer.render(this.scene, this.camera);
   }
 
   onWindowResize() {
     const width = this.container.clientWidth || window.innerWidth;
-    const height = this.container.clientHeight || 500;
+    const height = this.container.clientHeight || window.innerHeight;
 
     this.camera.aspect = width / height;
     this.camera.updateProjectionMatrix();
