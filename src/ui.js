@@ -1,33 +1,37 @@
 /**
- * Konohapoly - UI Renderer & HUD Manager (Local & Online standard DOM)
+ * Konohapoly - UI Renderer & HUD Manager with 3D Integration
  */
-import { BOARD, M } from './engine.js';
+import { BOARD } from './engine.js';
 import { sfx } from './sfx.js';
 
 export class UIRenderer {
-  constructor(appEl, netAdapter) {
+  constructor(appEl, netAdapter, gameScene = null) {
     this.app = appEl;
     this.net = netAdapter;
+    this.scene = gameScene;
     this.currentRoom = null;
     this.notifications = [];
     this.lastTurnIdx = -1;
+
+    // Power Bar Dadu
+    this.isChargingPower = false;
+    this.powerValue = 0;
+    this.powerInterval = null;
 
     this.net.subscribe(room => {
       this.currentRoom = room;
       this.render();
       this.checkTurnNotification();
+      if (this.scene && room && room.gameState) {
+        this.scene.updateState(room.gameState);
+      }
     });
   }
 
   formatMoney(amount) {
-    if (amount >= 100000) {
-      return `Rp${(amount / 1000).toFixed(0)}jt`;
-    } else if (amount >= 1000) {
-      const jt = (amount / 1000).toFixed(1).replace('.0', '');
-      return `Rp${jt}jt`;
-    } else {
-      return `Rp${amount}rb`;
-    }
+    if (amount >= 100000) return `Rp${(amount / 1000).toFixed(0)}jt`;
+    if (amount >= 1000) return `Rp${(amount / 1000).toFixed(1).replace('.0', '')}jt`;
+    return `Rp${amount}rb`;
   }
 
   checkTurnNotification() {
@@ -54,12 +58,10 @@ export class UIRenderer {
   }
 
   renderNotifications() {
-    let container = document.getElementById('notif-container');
+    const container = document.getElementById('notif-container');
     if (!container) return;
     container.innerHTML = this.notifications.map(n => `
-      <div class="notif-toast notif-${n.type}">
-        ${n.text}
-      </div>
+      <div class="notif-toast notif-${n.type}">${n.text}</div>
     `).join('');
   }
 
@@ -125,7 +127,7 @@ export class UIRenderer {
             } else {
               return `
                 <div class="member-card empty">
-                  <span>Empty Seat</span>
+                  <span>Sisa Kursi</span>
                   ${isHost ? `<button class="btn-sm" onclick="window.uiToggleLock(${seatIdx})">Kunci</button>` : ''}
                 </div>
               `;
@@ -135,8 +137,8 @@ export class UIRenderer {
 
         <div class="lobby-actions">
           ${isHost ? `
-            <button class="btn btn-secondary" onclick="window.uiAddBot()">+ Tambah Bot 🤖</button>
-            <button class="btn btn-secondary" onclick="window.uiAddHotseat()">+ Mabar HP Sama 📱</button>
+            <button class="btn btn-secondary" onclick="window.uiAddBot()">+ Bot 🤖</button>
+            <button class="btn btn-secondary" onclick="window.uiAddHotseat()">+ Hotseat 📱</button>
             <button class="btn btn-primary" ${room.members.length < 3 ? 'disabled' : ''} onclick="window.uiStartGame()">🚀 Mulai Game (${room.members.length}/4)</button>
           ` : '<p>Menunggu Host memulai game...</p>'}
         </div>
@@ -152,82 +154,124 @@ export class UIRenderer {
 
   renderGame() {
     const S = this.currentRoom.gameState;
-    const activePlayer = S.players[S.turnIdx];
-    const isMyTurn = activePlayer.id === S.turnIdx; // Simplified local check
 
-    this.app.innerHTML = `
-      <div class="game-layout">
-        <div class="top-bar">
-          <div class="chips-row">
-            ${S.players.map(p => `
-              <div class="player-chip ${p.id === S.turnIdx ? 'active' : ''} ${p.isBankrupt ? 'bankrupt' : ''}" style="border-left: 4px solid ${p.color}">
-                <div class="p-name">${p.name} ${p.isBot ? '🤖' : ''}</div>
-                <div class="p-cash">${p.isBankrupt ? 'BANGKRUT' : this.formatMoney(p.cash)}</div>
-              </div>
-            `).join('')}
+    // Pastikan kontainer 3D dan UI overlay terpisah dengan rapi
+    if (!document.getElementById('scene-3d-container')) {
+      this.app.innerHTML = `
+        <div class="game-layout">
+          <div class="top-bar">
+            <div class="chips-row" id="chips-row"></div>
+            <div class="game-info-bar" id="game-info-bar"></div>
           </div>
-          <div class="game-info-bar">
-            <span> Putaran: <b>${S.round}</b></span>
-            <span> Inflasi: <b>${(S.infl * 100).toFixed(1)}%</b></span>
-            <span> Dana Hibah: <b>${this.formatMoney(S.hibahPool)}</b></span>
-          </div>
+
+          <div id="notif-container" class="notif-container"></div>
+          
+          <button id="btn-camera-toggle" class="btn-cam-toggle">🎯 Kamera</button>
+
+          <!-- Canvas 3D Three.js -->
+          <div id="scene-3d-container" class="scene-3d-container"></div>
+
+          <div class="dock-bottom" id="dock-bottom"></div>
         </div>
+      `;
 
-        <div id="notif-container" class="notif-container"></div>
+      document.getElementById('btn-camera-toggle').onclick = () => {
+        if (this.scene) {
+          const mode = this.scene.toggleCameraMode();
+          this.addNotification(`Kamera: ${mode === 'follow' ? 'Ikuti Bidak 🎯' : 'Overview 🗺️'}`);
+        }
+      };
 
-        <div class="board-container 2d-fallback">
-          <div class="board-grid">
-            ${BOARD.map(tile => {
-              const pData = S.props[tile.id];
-              let ownerColor = 'transparent';
-              if (pData && pData.owner !== null) {
-                ownerColor = S.players[pData.owner].color;
-              }
-              const playersOnTile = S.players.filter(p => !p.isBankrupt && p.pos === tile.id);
+      if (this.scene) {
+        const container = document.getElementById('scene-3d-container');
+        container.appendChild(this.scene.renderer.domElement);
+        this.scene.onWindowResize();
+      }
+    }
 
-              return `
-                <div class="tile-card" style="border-top: 5px solid ${ownerColor}">
-                  <div class="tile-id">#${tile.id}</div>
-                  <div class="tile-name">${tile.name}</div>
-                  ${pData && pData.mortgaged ? `<span class="badge-mortgage">🔒 DIGADAI</span>` : ''}
-                  <div class="tile-tokens">
-                    ${playersOnTile.map(pt => `<span class="token" style="background:${pt.color}"></span>`).join('')}
-                  </div>
-                </div>
-              `;
-            }).join('')}
-          </div>
-        </div>
-
-        <div class="dock-bottom">
-          ${S.phase === 'gameover' ? `
-            <div class="popup-box">
-              <h2>🏆 GAME OVER!</h2>
-              <p>Pemenang: <b>${S.winner !== null ? S.players[S.winner].name : 'Tidak Ada'}</b></p>
-            </div>
-          ` : `
-            <div class="controls-row">
-              ${S.phase === 'roll' ? `
-                <button class="btn btn-primary btn-xl" onclick="window.uiRollDice()">🎲 Lempar Dadu</button>
-              ` : ''}
-
-              ${S.phase === 'decide' && S.pendingAction ? this.renderDecideOptions(S) : ''}
-            </div>
-          `}
-        </div>
+    // Update Top Bar & HUD
+    document.getElementById('chips-row').innerHTML = S.players.map(p => `
+      <div class="player-chip ${p.id === S.turnIdx ? 'active' : ''} ${p.isBankrupt ? 'bankrupt' : ''}" style="border-left: 4px solid ${p.color}">
+        <div class="p-name">${p.name} ${p.isBot ? '🤖' : ''}</div>
+        <div class="p-cash">${p.isBankrupt ? 'BANGKRUT' : this.formatMoney(p.cash)}</div>
       </div>
+    `).join('');
+
+    document.getElementById('game-info-bar').innerHTML = `
+      <span> Putaran: <b>${S.round}</b></span>
+      <span> Inflasi: <b>${(S.infl * 100).toFixed(1)}%</b></span>
+      <span> Dana Hibah: <b>${this.formatMoney(S.hibahPool)}</b></span>
     `;
 
-    this.renderNotifications();
+    // Update Bottom Dock Controls
+    const dock = document.getElementById('dock-bottom');
+    if (S.phase === 'gameover') {
+      dock.innerHTML = `
+        <div class="popup-box">
+          <h2>🏆 GAME OVER!</h2>
+          <p>Pemenang: <b>${S.winner !== null ? S.players[S.winner].name : 'Tidak Ada'}</b></p>
+        </div>
+      `;
+    } else {
+      if (S.phase === 'roll') {
+        dock.innerHTML = `
+          <div class="power-bar-container">
+            <div class="power-bar-fill" id="power-bar-fill"></div>
+          </div>
+          <button id="btn-roll-dice" class="btn btn-primary btn-xl">🎲 Tahan Lalu Lepas</button>
+        `;
+        this.attachDicePowerEvents();
+      } else if (S.phase === 'decide' && S.pendingAction) {
+        dock.innerHTML = this.renderDecideOptions(S);
+      } else {
+        dock.innerHTML = `<div class="status-waiting">Menunggu giliran...</div>`;
+      }
+    }
 
-    window.uiRollDice = () => {
-      sfx.playDice();
-      this.net.dispatch('ACT', { action: { type: 'ROLL' } });
-    };
+    this.renderNotifications();
 
     window.uiDecide = (choice) => {
       this.net.dispatch('ACT', { action: { type: 'DECIDE', choice } });
     };
+  }
+
+  attachDicePowerEvents() {
+    const btn = document.getElementById('btn-roll-dice');
+    const fill = document.getElementById('power-bar-fill');
+    if (!btn) return;
+
+    const startCharge = () => {
+      this.isChargingPower = true;
+      this.powerValue = 0;
+      clearInterval(this.powerInterval);
+      this.powerInterval = setInterval(() => {
+        this.powerValue = (this.powerValue + 5) % 100;
+        if (fill) fill.style.width = `${this.powerValue}%`;
+      }, 30);
+    };
+
+    const releaseCharge = () => {
+      if (!this.isChargingPower) return;
+      this.isChargingPower = false;
+      clearInterval(this.powerInterval);
+
+      sfx.playDice();
+      
+      // Kirim lemparan dadu
+      const d1 = Math.floor(Math.random() * 6) + 1;
+      const d2 = Math.floor(Math.random() * 6) + 1;
+      
+      if (this.scene) {
+        this.scene.triggerDiceRoll(d1, d2);
+      }
+
+      this.net.dispatch('ACT', { action: { type: 'ROLL', d1, d2 } });
+    };
+
+    btn.onmousedown = startCharge;
+    btn.onmouseup = releaseCharge;
+    btn.ontouchstart = (e) => { e.preventDefault(); startCharge(); };
+    btn.ontouchend = (e) => { e.preventDefault(); releaseCharge(); };
   }
 
   renderDecideOptions(S) {
