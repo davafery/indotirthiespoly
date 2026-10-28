@@ -1,8 +1,9 @@
 /**
- * Konohapoly - UI Renderer & HUD Manager with Mobile Fixed Controls
+ * Konohapoly - Complete UI Engine
  */
 import { BOARD } from './engine.js';
 import { sfx } from './sfx.js';
+import { getBotChat } from './botchat.js';
 
 export class UIRenderer {
   constructor(appEl, netAdapter, gameScene = null) {
@@ -11,9 +12,9 @@ export class UIRenderer {
     this.scene = gameScene;
     this.currentRoom = null;
     this.notifications = [];
+    this.chatMessages = [];
     this.lastTurnIdx = -1;
 
-    // Power Bar Dadu
     this.isChargingPower = false;
     this.powerValue = 0;
     this.powerInterval = null;
@@ -21,7 +22,6 @@ export class UIRenderer {
     this.net.subscribe(room => {
       this.currentRoom = room;
       this.render();
-      this.checkTurnNotification();
       if (this.scene && room && room.gameState) {
         this.scene.updateState(room.gameState);
       }
@@ -32,19 +32,6 @@ export class UIRenderer {
     if (amount >= 100000) return `Rp${(amount / 1000).toFixed(0)}jt`;
     if (amount >= 1000) return `Rp${(amount / 1000).toFixed(1).replace('.0', '')}jt`;
     return `Rp${amount}rb`;
-  }
-
-  checkTurnNotification() {
-    if (!this.currentRoom || this.currentRoom.status !== 'playing') return;
-    const S = this.currentRoom.gameState;
-    if (S.turnIdx !== this.lastTurnIdx) {
-      this.lastTurnIdx = S.turnIdx;
-      const activePlayer = S.players[S.turnIdx];
-      if (!activePlayer.isBot && !activePlayer.afk) {
-        sfx.playTurnAlert();
-        this.addNotification(`🔔 Giliranmu bertindak, ${activePlayer.name}!`, 'info');
-      }
-    }
   }
 
   addNotification(text, type = 'info') {
@@ -88,6 +75,7 @@ export class UIRenderer {
           <input type="text" id="username-input" class="input-field" placeholder="Masukkan nama..." value="Rakyat 1" />
         </div>
         <button id="btn-create-local" class="btn btn-primary">🎮 Main Lokal / Hotseat</button>
+        <button id="btn-show-rules" class="btn btn-secondary">❓ Aturan Game</button>
       </div>
     `;
 
@@ -96,6 +84,8 @@ export class UIRenderer {
       this.net.setCurrentUser(name);
       this.net.createRoom();
     };
+
+    document.getElementById('btn-show-rules').onclick = () => this.showRulesModal();
   }
 
   renderLobby() {
@@ -108,47 +98,24 @@ export class UIRenderer {
         <div class="member-list">
           ${[0, 1, 2, 3].map(seatIdx => {
             const member = room.members.find(m => m.seat === seatIdx);
-            const isLocked = room.lockedSeats[seatIdx];
-
-            if (member) {
-              return `
-                <div class="member-card">
-                  <span>${member.name} ${member.isBot ? '🤖' : ''} ${member.isHotseat ? '📱' : ''}</span>
-                  ${isHost && member.id !== this.net.currentUser.id ? `<button class="btn-sm btn-danger" onclick="window.uiKick('${member.id}')">Kick</button>` : ''}
-                </div>
-              `;
-            } else if (isLocked) {
-              return `
-                <div class="member-card empty locked">
-                  <span>🔒 Kursi Dikunci</span>
-                  ${isHost ? `<button class="btn-sm" onclick="window.uiToggleLock(${seatIdx})">Buka</button>` : ''}
-                </div>
-              `;
-            } else {
-              return `
-                <div class="member-card empty">
-                  <span>Sisa Kursi</span>
-                  ${isHost ? `<button class="btn-sm" onclick="window.uiToggleLock(${seatIdx})">Kunci</button>` : ''}
-                </div>
-              `;
-            }
+            return member ? `
+              <div class="member-card">
+                <span>${member.name} ${member.isBot ? '🤖' : ''}</span>
+              </div>
+            ` : `<div class="member-card empty"><span>Kursi Kosong</span></div>`;
           }).join('')}
         </div>
 
         <div class="lobby-actions">
           ${isHost ? `
             <button class="btn btn-secondary" onclick="window.uiAddBot()">+ Bot 🤖</button>
-            <button class="btn btn-secondary" onclick="window.uiAddHotseat()">+ Hotseat 📱</button>
-            <button class="btn btn-primary" ${room.members.length < 3 ? 'disabled' : ''} onclick="window.uiStartGame()">🚀 Mulai Game (${room.members.length}/4)</button>
-          ` : '<p>Menunggu Host memulai game...</p>'}
+            <button class="btn btn-primary" ${room.members.length < 3 ? 'disabled' : ''} onclick="window.uiStartGame()">🚀 Mulai Game</button>
+          ` : '<p>Menunggu Host memulai...</p>'}
         </div>
       </div>
     `;
 
     window.uiAddBot = () => this.net.dispatch('ADD_BOT');
-    window.uiAddHotseat = () => this.net.dispatch('ADD_HOTSEAT');
-    window.uiToggleLock = (seat) => this.net.dispatch('TOGGLE_LOCK', { seat });
-    window.uiKick = (targetId) => this.net.dispatch('KICK', { targetId });
     window.uiStartGame = () => this.net.dispatch('START_GAME');
   }
 
@@ -161,13 +128,12 @@ export class UIRenderer {
           <div class="top-bar">
             <div class="chips-row" id="chips-row"></div>
             <div class="game-info-bar" id="game-info-bar"></div>
+            ${S.decree ? `<div class="decree-pill">📜 DEKRIT: ${S.decree}</div>` : ''}
           </div>
 
           <div id="notif-container" class="notif-container"></div>
-          
           <button id="btn-camera-toggle" class="btn-cam-toggle">🎯 Kamera</button>
 
-          <!-- Canvas 3D Three.js -->
           <div id="scene-3d-container" class="scene-3d-container"></div>
 
           <div class="dock-bottom" id="dock-bottom"></div>
@@ -175,10 +141,7 @@ export class UIRenderer {
       `;
 
       document.getElementById('btn-camera-toggle').onclick = () => {
-        if (this.scene) {
-          const mode = this.scene.toggleCameraMode();
-          this.addNotification(`Kamera: ${mode === 'follow' ? 'Ikuti Bidak 🎯' : 'Overview 🗺️'}`);
-        }
+        if (this.scene) this.scene.toggleCameraMode();
       };
 
       if (this.scene) {
@@ -188,50 +151,46 @@ export class UIRenderer {
       }
     }
 
-    // Update Top Bar
     document.getElementById('chips-row').innerHTML = S.players.map(p => `
-      <div class="player-chip ${p.id === S.turnIdx ? 'active' : ''} ${p.isBankrupt ? 'bankrupt' : ''}" style="border-left: 4px solid ${p.color}">
+      <div class="player-chip ${p.id === S.turnIdx ? 'active' : ''}">
         <div class="p-name">${p.name} ${p.isBot ? '🤖' : ''}</div>
         <div class="p-cash">${p.isBankrupt ? 'BANGKRUT' : this.formatMoney(p.cash)}</div>
       </div>
     `).join('');
 
     document.getElementById('game-info-bar').innerHTML = `
-      <span> Putaran: <b>${S.round}</b></span>
-      <span> Inflasi: <b>${(S.infl * 100).toFixed(1)}%</b></span>
-      <span> Dana Hibah: <b>${this.formatMoney(S.hibahPool)}</b></span>
+      <span>Putaran: <b>${S.round}</b></span>
+      <span>Inflasi: <b>${(S.infl * 100).toFixed(1)}%</b></span>
+      <span>Dana Hibah: <b>${this.formatMoney(S.hibahPool)}</b></span>
     `;
 
-    // Update Bottom Dock Controls
     const dock = document.getElementById('dock-bottom');
-    if (S.phase === 'gameover') {
+
+    if (S.votingState && S.votingState.active) {
       dock.innerHTML = `
         <div class="popup-box">
-          <h2>🏆 GAME OVER!</h2>
-          <p>Pemenang: <b>${S.winner !== null ? S.players[S.winner].name : 'Tidak Ada'}</b></p>
+          <h3>🗳️ PEMILU KEBIJAKAN</h3>
+          <p>Pilih kebijakan periode berikutnya:</p>
+          <button class="btn btn-primary" onclick="window.uiVote('NAIK_UMR')">💼 UMR +25%</button>
+          <button class="btn btn-warning" onclick="window.uiVote('MAKAN_SIANG')">🍱 Makan Siang Gratis</button>
+          <button class="btn btn-secondary" onclick="window.uiVote('SUBSIDI_HIDUP')">🍚 Subsidi Biaya Hidup</button>
         </div>
       `;
-    } else {
-      if (S.phase === 'roll') {
-        dock.innerHTML = `
-          <div class="power-bar-container">
-            <div class="power-bar-fill" id="power-bar-fill"></div>
-          </div>
-          <button id="btn-roll-dice" class="btn btn-primary btn-xl">🎲 Tahan Lalu Lepas</button>
-        `;
-        this.attachDicePowerEvents();
-      } else if (S.phase === 'decide' && S.pendingAction) {
-        dock.innerHTML = this.renderDecideOptions(S);
-      } else {
-        dock.innerHTML = `<div class="status-waiting">🤔 Menunggu keputusan...</div>`;
-      }
+      window.uiVote = (policy) => {
+        this.net.dispatch('ACT', { action: { type: 'VOTE_POLICY', policy } });
+      };
+      return;
     }
 
-    this.renderNotifications();
-
-    window.uiDecide = (choice) => {
-      this.net.dispatch('ACT', { action: { type: 'DECIDE', choice } });
-    };
+    if (S.phase === 'roll') {
+      dock.innerHTML = `
+        <div class="power-bar-container"><div class="power-bar-fill" id="power-bar-fill"></div></div>
+        <button id="btn-roll-dice" class="btn btn-primary btn-xl">🎲 Tahan Lalu Lepas</button>
+      `;
+      this.attachDicePowerEvents();
+    } else if (S.phase === 'decide' && S.pendingAction) {
+      dock.innerHTML = this.renderDecideOptions(S);
+    }
   }
 
   attachDicePowerEvents() {
@@ -258,14 +217,10 @@ export class UIRenderer {
       clearInterval(this.powerInterval);
 
       sfx.playDice();
-      
       const d1 = Math.floor(Math.random() * 6) + 1;
       const d2 = Math.floor(Math.random() * 6) + 1;
-      
-      if (this.scene) {
-        this.scene.triggerDiceRoll(d1, d2);
-      }
 
+      if (this.scene) this.scene.triggerDiceRoll(d1, d2);
       this.net.dispatch('ACT', { action: { type: 'ROLL', d1, d2 } });
     };
 
@@ -288,25 +243,11 @@ export class UIRenderer {
           <button class="btn btn-secondary" onclick="window.uiDecide('SKIP')">Lewati</button>
         </div>
       `;
-    } else if (act.type === 'UPGRADE_BUILDING') {
-      return `
-        <div class="popup-box">
-          <h3>Tingkatkan Bangunan: ${tile.name}</h3>
-          <button class="btn btn-primary" onclick="window.uiDecide('OFFICIAL')">Izin Resmi (${this.formatMoney(act.cost)})</button>
-          <button class="btn btn-warning" onclick="window.uiDecide('PELICIN')">Uang Pelicin (${this.formatMoney(Math.round(act.cost * 1.5))})</button>
-          <button class="btn btn-secondary" onclick="window.uiDecide('SKIP')">Nanti Saja</button>
-        </div>
-      `;
-    } else if (act.type === 'TAKEOVER') {
-      return `
-        <div class="popup-box">
-          <h3>Takeover Properti ${tile.name}?</h3>
-          <p>Biaya: <b>${this.formatMoney(act.price)}</b></p>
-          <button class="btn btn-danger" onclick="window.uiDecide('TAKEOVER')">Beli Paksa (Takeover)</button>
-          <button class="btn btn-secondary" onclick="window.uiDecide('SKIP')">Lewati</button>
-        </div>
-      `;
     }
-    return '';
+    return `<button class="btn btn-secondary" onclick="window.uiDecide('SKIP')">Lanjut</button>`;
+  }
+
+  showRulesModal() {
+    alert(`📜 ATURAN KONOHAPOLY:\n\n1. Tujuan: Pemenang adalah pemain terakhir yang belum bangkrut.\n2. Inflasi naik setiap putaran, UMR naiknya lebih lambat.\n3. Lewat START: Terima UMR dan bayar Biaya Hidup.\n4. Izin Resmi punya 30% peluang ditolak, UMR Pelicin pasti berhasil.\n5. Gadai properti akan disita jika tidak ditebus dalam 4 putaran.\n6. Krisis Moneter terjadi pada putaran 40+ (Inflasi +100% per putaran).`);
   }
 }
