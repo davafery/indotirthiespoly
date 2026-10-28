@@ -1,5 +1,5 @@
 /**
- * Konohapoly - Network & Local Adapter Layer
+ * Konohapoly - Network Adapter (Supports Local & Supabase Online)
  */
 import { createRoom, reduceRoom } from './rooms.js';
 
@@ -49,7 +49,7 @@ export class LocalAdapter {
     const currentPlayer = S.players[currentActor];
 
     if (currentPlayer && (currentPlayer.isBot || currentPlayer.afk)) {
-      const delay = Math.floor(Math.random() * 1500) + 1500; // 1.5s - 3.0s thinking delay
+      const delay = Math.floor(Math.random() * 1500) + 1500;
       setTimeout(() => {
         if (!this.room || !this.room.gameState) return;
         if (this.room.gameState.turnIdx !== currentActor) return;
@@ -59,13 +59,9 @@ export class LocalAdapter {
           const pAct = S.pendingAction;
           let choice = 'SKIP';
           if (pAct) {
-            if (pAct.type === 'BUY_LAND') {
-              choice = currentPlayer.cash >= pAct.price ? 'BUY' : 'SKIP';
-            } else if (pAct.type === 'UPGRADE_BUILDING') {
-              choice = currentPlayer.cash >= pAct.cost * 1.4 ? 'PELICIN' : (currentPlayer.cash >= pAct.cost ? 'OFFICIAL' : 'SKIP');
-            } else if (pAct.type === 'TAKEOVER') {
-              choice = currentPlayer.cash >= pAct.price * 1.5 ? 'TAKEOVER' : 'SKIP';
-            }
+            if (pAct.type === 'BUY_LAND') choice = currentPlayer.cash >= pAct.price ? 'BUY' : 'SKIP';
+            else if (pAct.type === 'UPGRADE_BUILDING') choice = currentPlayer.cash >= pAct.cost * 1.4 ? 'PELICIN' : 'OFFICIAL';
+            else if (pAct.type === 'TAKEOVER') choice = currentPlayer.cash >= pAct.price * 1.5 ? 'TAKEOVER' : 'SKIP';
           }
           botAction = { type: 'DECIDE', choice };
         }
