@@ -1,5 +1,5 @@
 /**
- * Konohapoly - UI Renderer & HUD Manager with 3D Integration
+ * Konohapoly - UI Renderer & HUD Manager with Mobile Fixed Controls
  */
 import { BOARD } from './engine.js';
 import { sfx } from './sfx.js';
@@ -155,7 +155,6 @@ export class UIRenderer {
   renderGame() {
     const S = this.currentRoom.gameState;
 
-    // Pastikan kontainer 3D dan UI overlay terpisah dengan rapi
     if (!document.getElementById('scene-3d-container')) {
       this.app.innerHTML = `
         <div class="game-layout">
@@ -189,7 +188,7 @@ export class UIRenderer {
       }
     }
 
-    // Update Top Bar & HUD
+    // Update Top Bar
     document.getElementById('chips-row').innerHTML = S.players.map(p => `
       <div class="player-chip ${p.id === S.turnIdx ? 'active' : ''} ${p.isBankrupt ? 'bankrupt' : ''}" style="border-left: 4px solid ${p.color}">
         <div class="p-name">${p.name} ${p.isBot ? '🤖' : ''}</div>
@@ -224,7 +223,7 @@ export class UIRenderer {
       } else if (S.phase === 'decide' && S.pendingAction) {
         dock.innerHTML = this.renderDecideOptions(S);
       } else {
-        dock.innerHTML = `<div class="status-waiting">Menunggu giliran...</div>`;
+        dock.innerHTML = `<div class="status-waiting">🤔 Menunggu keputusan...</div>`;
       }
     }
 
@@ -240,7 +239,9 @@ export class UIRenderer {
     const fill = document.getElementById('power-bar-fill');
     if (!btn) return;
 
-    const startCharge = () => {
+    const startCharge = (e) => {
+      if (e) e.preventDefault();
+      if (this.isChargingPower) return;
       this.isChargingPower = true;
       this.powerValue = 0;
       clearInterval(this.powerInterval);
@@ -250,14 +251,14 @@ export class UIRenderer {
       }, 30);
     };
 
-    const releaseCharge = () => {
+    const releaseCharge = (e) => {
+      if (e) e.preventDefault();
       if (!this.isChargingPower) return;
       this.isChargingPower = false;
       clearInterval(this.powerInterval);
 
       sfx.playDice();
       
-      // Kirim lemparan dadu
       const d1 = Math.floor(Math.random() * 6) + 1;
       const d2 = Math.floor(Math.random() * 6) + 1;
       
@@ -270,8 +271,8 @@ export class UIRenderer {
 
     btn.onmousedown = startCharge;
     btn.onmouseup = releaseCharge;
-    btn.ontouchstart = (e) => { e.preventDefault(); startCharge(); };
-    btn.ontouchend = (e) => { e.preventDefault(); releaseCharge(); };
+    btn.ontouchstart = startCharge;
+    btn.ontouchend = releaseCharge;
   }
 
   renderDecideOptions(S) {
