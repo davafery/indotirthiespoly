@@ -1,26 +1,29 @@
-/* Konohapoly - Main Stylesheet with 3D Overlay Controls */
+/* Konohapoly - Main Stylesheet (Mobile Fixed Overlay Layout) */
 * {
   box-sizing: border-box;
   margin: 0;
   padding: 0;
   font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
   user-select: none;
+  -webkit-user-select: none;
 }
 
-body {
+html, body {
+  width: 100%;
+  height: 100%;
+  height: 100dvh;
+  overflow: hidden;
+  position: fixed;
   background-color: #121212;
   color: #f1f1f1;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  min-height: 100vh;
-  overflow: hidden;
 }
 
 #app {
-  width: 100vw;
-  height: 100vh;
+  width: 100%;
+  height: 100%;
+  height: 100dvh;
   position: relative;
+  overflow: hidden;
 }
 
 .card-modal {
@@ -66,7 +69,7 @@ body {
 .btn-success { background: #22a55b; color: #fff; }
 .btn-warning { background: #f2b705; color: #000; }
 .btn-danger { background: #e63946; color: #fff; }
-.btn-xl { font-size: 1.2rem; padding: 14px 28px; }
+.btn-xl { font-size: 1.1rem; padding: 14px 28px; }
 
 .member-list { display: flex; flex-direction: column; gap: 8px; margin: 16px 0; }
 .member-card {
@@ -79,13 +82,12 @@ body {
 }
 .member-card.empty { border: 1px dashed #555; background: transparent; }
 
-/* Layout 3D & HUD Overlay */
+/* 3D Canvas Container */
 .game-layout {
-  width: 100vw;
-  height: 100vh;
-  display: flex;
-  flex-direction: column;
+  width: 100%;
+  height: 100%;
   position: relative;
+  overflow: hidden;
 }
 
 .scene-3d-container {
@@ -97,18 +99,20 @@ body {
   z-index: 1;
 }
 
+/* Fixed Floating HUD Overlays */
 .top-bar {
-  position: absolute;
+  position: fixed;
   top: 0;
   left: 0;
   right: 0;
-  z-index: 10;
-  background: rgba(24, 24, 28, 0.85);
+  z-index: 100;
+  background: rgba(24, 24, 28, 0.9);
   backdrop-filter: blur(8px);
-  padding: 8px 16px;
+  padding: 8px 12px;
   display: flex;
   flex-direction: column;
   gap: 6px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .chips-row { display: flex; gap: 8px; overflow-x: auto; }
@@ -127,40 +131,48 @@ body {
 .game-info-bar { display: flex; gap: 16px; font-size: 0.8rem; color: #bbb; }
 
 .btn-cam-toggle {
-  position: absolute;
-  top: 90px;
-  right: 16px;
-  z-index: 10;
+  position: fixed;
+  top: 95px;
+  right: 12px;
+  z-index: 100;
   background: rgba(30, 30, 36, 0.9);
   color: #fff;
-  border: 1px solid #444;
-  padding: 8px 12px;
+  border: 1px solid #555;
+  padding: 8px 14px;
   border-radius: 20px;
   cursor: pointer;
   font-size: 0.85rem;
+  font-weight: bold;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.5);
 }
 
+/* Dock Bawah Melayang di Atas Canvas */
 .dock-bottom {
-  position: absolute;
+  position: fixed;
   bottom: 0;
   left: 0;
   right: 0;
-  z-index: 10;
-  background: rgba(24, 24, 28, 0.85);
-  backdrop-filter: blur(8px);
-  padding: 16px;
+  z-index: 100;
+  background: rgba(24, 24, 28, 0.92);
+  backdrop-filter: blur(10px);
+  padding: 12px 16px;
+  padding-bottom: max(16px, env(safe-area-inset-bottom));
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 10px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.6);
 }
 
 .power-bar-container {
-  width: 220px;
-  height: 10px;
-  background: #333;
-  border-radius: 5px;
+  width: 100%;
+  max-width: 260px;
+  height: 12px;
+  background: #222;
+  border-radius: 6px;
   overflow: hidden;
+  border: 1px solid #444;
 }
 
 .power-bar-fill {
@@ -170,17 +182,25 @@ body {
   transition: width 0.03s linear;
 }
 
+#btn-roll-dice {
+  width: 100%;
+  max-width: 280px;
+  touch-action: manipulation;
+}
+
 .popup-box {
   background: #2a2a34;
   padding: 14px 20px;
   border-radius: 8px;
   text-align: center;
+  width: 100%;
+  max-width: 320px;
 }
 
 .notif-container {
-  position: absolute;
-  top: 130px;
-  right: 16px;
+  position: fixed;
+  top: 135px;
+  right: 12px;
   z-index: 999;
   display: flex;
   flex-direction: column;
