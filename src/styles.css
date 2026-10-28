@@ -1,11 +1,10 @@
-/* Konohapoly - Main Stylesheet (Mobile Fixed Overlay Layout) */
+/* Konohapoly - Style Lengkap */
 * {
   box-sizing: border-box;
   margin: 0;
   padding: 0;
   font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
   user-select: none;
-  -webkit-user-select: none;
 }
 
 html, body {
@@ -21,9 +20,7 @@ html, body {
 #app {
   width: 100%;
   height: 100%;
-  height: 100dvh;
   position: relative;
-  overflow: hidden;
 }
 
 .card-modal {
@@ -37,7 +34,7 @@ html, body {
   margin: 10vh auto;
 }
 
-.title { color: #e63946; font-size: 2rem; margin-bottom: 4px; }
+.title { color: #e63946; font-size: 2rem; }
 .subtitle { color: #a0a0a0; font-size: 0.9rem; margin-bottom: 20px; }
 
 .form-group { margin-bottom: 16px; text-align: left; }
@@ -59,11 +56,9 @@ html, body {
   border-radius: 6px;
   font-weight: bold;
   cursor: pointer;
-  transition: transform 0.1s, opacity 0.2s;
   margin: 4px;
 }
 
-.btn:active { transform: scale(0.97); }
 .btn-primary { background: #1d8cf0; color: #fff; }
 .btn-secondary { background: #444452; color: #fff; }
 .btn-success { background: #22a55b; color: #fff; }
@@ -72,34 +67,11 @@ html, body {
 .btn-xl { font-size: 1.1rem; padding: 14px 28px; }
 
 .member-list { display: flex; flex-direction: column; gap: 8px; margin: 16px 0; }
-.member-card {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  background: #2a2a34;
-  padding: 10px 14px;
-  border-radius: 6px;
-}
-.member-card.empty { border: 1px dashed #555; background: transparent; }
+.member-card { background: #2a2a34; padding: 10px 14px; border-radius: 6px; }
 
-/* 3D Canvas Container */
-.game-layout {
-  width: 100%;
-  height: 100%;
-  position: relative;
-  overflow: hidden;
-}
+.game-layout { width: 100%; height: 100%; position: relative; }
+.scene-3d-container { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; }
 
-.scene-3d-container {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  z-index: 1;
-}
-
-/* Fixed Floating HUD Overlays */
 .top-bar {
   position: fixed;
   top: 0;
@@ -107,32 +79,34 @@ html, body {
   right: 0;
   z-index: 100;
   background: rgba(24, 24, 28, 0.9);
-  backdrop-filter: blur(8px);
   padding: 8px 12px;
   display: flex;
   flex-direction: column;
   gap: 6px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .chips-row { display: flex; gap: 8px; overflow-x: auto; }
-.player-chip {
-  background: #25252e;
-  padding: 6px 12px;
-  border-radius: 6px;
-  min-width: 110px;
-}
+.player-chip { background: #25252e; padding: 6px 12px; border-radius: 6px; min-width: 100px; }
 .player-chip.active { box-shadow: 0 0 8px #1d8cf0; }
-.player-chip.bankrupt { opacity: 0.4; }
 
 .p-name { font-size: 0.8rem; font-weight: bold; }
 .p-cash { font-size: 0.9rem; color: #22a55b; }
 
 .game-info-bar { display: flex; gap: 16px; font-size: 0.8rem; color: #bbb; }
 
+.decree-pill {
+  background: #f2b705;
+  color: #000;
+  font-weight: bold;
+  font-size: 0.75rem;
+  padding: 2px 8px;
+  border-radius: 12px;
+  align-self: flex-start;
+}
+
 .btn-cam-toggle {
   position: fixed;
-  top: 95px;
+  top: 105px;
   right: 12px;
   z-index: 100;
   background: rgba(30, 30, 36, 0.9);
@@ -140,13 +114,8 @@ html, body {
   border: 1px solid #555;
   padding: 8px 14px;
   border-radius: 20px;
-  cursor: pointer;
-  font-size: 0.85rem;
-  font-weight: bold;
-  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.5);
 }
 
-/* Dock Bawah Melayang di Atas Canvas */
 .dock-bottom {
   position: fixed;
   bottom: 0;
@@ -154,15 +123,11 @@ html, body {
   right: 0;
   z-index: 100;
   background: rgba(24, 24, 28, 0.92);
-  backdrop-filter: blur(10px);
   padding: 12px 16px;
-  padding-bottom: max(16px, env(safe-area-inset-bottom));
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 10px;
-  border-top: 1px solid rgba(255, 255, 255, 0.1);
-  box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.6);
 }
 
 .power-bar-container {
@@ -172,46 +137,15 @@ html, body {
   background: #222;
   border-radius: 6px;
   overflow: hidden;
-  border: 1px solid #444;
 }
 
 .power-bar-fill {
   width: 0%;
   height: 100%;
   background: linear-gradient(90deg, #22a55b, #f2b705, #e63946);
-  transition: width 0.03s linear;
 }
 
-#btn-roll-dice {
-  width: 100%;
-  max-width: 280px;
-  touch-action: manipulation;
-}
+.popup-box { background: #2a2a34; padding: 14px; border-radius: 8px; text-align: center; }
 
-.popup-box {
-  background: #2a2a34;
-  padding: 14px 20px;
-  border-radius: 8px;
-  text-align: center;
-  width: 100%;
-  max-width: 320px;
-}
-
-.notif-container {
-  position: fixed;
-  top: 135px;
-  right: 12px;
-  z-index: 999;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.notif-toast {
-  background: #2d3a8c;
-  color: #fff;
-  padding: 8px 14px;
-  border-radius: 6px;
-  font-size: 0.85rem;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
-}
+.notif-container { position: fixed; top: 145px; right: 12px; z-index: 999; display: flex; flex-direction: column; gap: 8px; }
+.notif-toast { background: #2d3a8c; color: #fff; padding: 8px 14px; border-radius: 6px; font-size: 0.85rem; }
