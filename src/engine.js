@@ -1,695 +1,986 @@
-/**
- * Konohapoly - Engine Lengkap (Aturan, Ekonomi, Kartu, Berita, Pemilu, Dekrit, Bencana)
- */
+(function (root, factory) {
+  if (typeof module === 'object' && module.exports) {
+    module.exports = factory();
+  } else {
+    root.KonohapolyEngine = factory();
+  }
+}(typeof globalThis !== 'undefined' ? globalThis : this, function () {
+  'use strict';
 
-export const BOARD = [
-  { id: 0, type: 'start', name: 'Gajian UMR' },
-  { id: 1, type: 'prop', name: 'Lampung', group: 'lampung', price: 4000, rent: 150 },
-  { id: 2, type: 'risiko', name: 'Risiko' },
-  { id: 3, type: 'prop', name: 'Bengkulu', group: 'lampung', price: 4000, rent: 250 },
-  { id: 4, type: 'ppn', name: 'PPN 12%' },
-  { id: 5, type: 'trans', name: 'Tol Sumatra', price: 13000 },
-  { id: 6, type: 'prop', name: 'Palembang', group: 'sumatra', price: 6500, rent: 400 },
-  { id: 7, type: 'kesempatan', name: 'Kesempatan' },
-  { id: 8, type: 'prop', name: 'Padang', group: 'sumatra', price: 6500, rent: 400 },
-  { id: 9, type: 'prop', name: 'Medan', group: 'sumatra', price: 8000, rent: 550 },
-  { id: 10, type: 'jail', name: 'Rutan' },
-  { id: 11, type: 'prop', name: 'Pontianak', group: 'kalimantan', price: 9500, rent: 650 },
-  { id: 12, type: 'kesempatan', name: 'Kesempatan' },
-  { id: 13, type: 'prop', name: 'Balikpapan', group: 'kalimantan', price: 9500, rent: 650 },
-  { id: 14, type: 'prop', name: 'IKN', group: 'kalimantan', price: 10500, rent: 800 },
-  { id: 15, type: 'trans', name: 'Tol Laut', price: 13000 },
-  { id: 16, type: 'prop', name: 'Makassar', group: 'sulawesi', price: 12000, rent: 950 },
-  { id: 17, type: 'risiko', name: 'Risiko' },
-  { id: 18, type: 'prop', name: 'Kendari', group: 'sulawesi', price: 12000, rent: 950 },
-  { id: 19, type: 'prop', name: 'Manado', group: 'sulawesi', price: 13000, rent: 1050 },
-  { id: 20, type: 'hibah', name: 'Dana Hibah' },
-  { id: 21, type: 'prop', name: 'Ambon', group: 'timur', price: 14500, rent: 1200 },
-  { id: 22, type: 'kesempatan', name: 'Kesempatan' },
-  { id: 23, type: 'prop', name: 'Raja Ampat', group: 'timur', price: 14500, rent: 1200 },
-  { id: 24, type: 'prop', name: 'Jayapura', group: 'timur', price: 16000, rent: 1350 },
-  { id: 25, type: 'trans', name: 'Bandara Sepi', price: 13000 },
-  { id: 26, type: 'prop', name: 'Labuan Bajo', group: 'nusra', price: 17500, rent: 1450 },
-  { id: 27, type: 'prop', name: 'Mandalika', group: 'nusra', price: 17500, rent: 1450 },
-  { id: 28, type: 'risiko', name: 'Risiko' },
-  { id: 29, type: 'prop', name: 'Bali', group: 'nusra', price: 18500, rent: 1600 },
-  { id: 30, type: 'ciduk', name: 'Diciduk!' },
-  { id: 31, type: 'prop', name: 'Surabaya', group: 'jawa', price: 20000, rent: 1750 },
-  { id: 32, type: 'prop', name: 'Yogyakarta', group: 'jawa', price: 20000, rent: 1750 },
-  { id: 33, type: 'lurah', name: 'Kelurahan' },
-  { id: 34, type: 'prop', name: 'Semarang', group: 'jawa', price: 21000, rent: 1850 },
-  { id: 35, type: 'trans', name: 'Kereta Cepat', price: 13000 },
-  { id: 36, type: 'pejabat', name: 'Kantor Pejabat' },
-  { id: 37, type: 'prop', name: 'PIK', group: 'jakarta', price: 23500, rent: 2350 },
-  { id: 38, type: 'tilang', name: 'Razia Tilang' },
-  { id: 39, type: 'prop', name: 'Menteng', group: 'jakarta', price: 26500, rent: 3300 }
-];
+  const LVL_NAMES = ['Tanah Kosong', 'Rumah', 'Ruko', 'Landmark'];
+  const LVL_RENT_MULT = [1.0, 2.6, 5.5, 11.0];
 
-export const GROUPS = {
-  lampung: { name: 'Sumatra Selatan', color: '#9A6B4F', buildCost: 3500, members: [1, 3] },
-  sumatra: { name: 'Sumatra', color: '#5BB8F0', buildCost: 3500, members: [6, 8, 9] },
-  kalimantan: { name: 'Kalimantan', color: '#E0569B', buildCost: 6500, members: [11, 13, 14] },
-  sulawesi: { name: 'Sulawesi', color: '#F28C28', buildCost: 6500, members: [16, 18, 19] },
-  timur: { name: 'Maluku & Papua', color: '#E63946', buildCost: 10000, members: [21, 23, 24] },
-  nusra: { name: 'Bali & Nusa Tenggara', color: '#E9B824', buildCost: 10000, members: [26, 27, 29] },
-  jawa: { name: 'Jawa', color: '#2E9E4F', buildCost: 13000, members: [31, 32, 34] },
-  jakarta: { name: 'Jakarta Elite', color: '#2D3A8C', buildCost: 13000, members: [37, 39] }
-};
+  const GROUPS = {
+    pinggiran: { name: 'Pinggiran Kota', color: '#92400e', buildCost: 2500 },
+    industri:  { name: 'Kawasan Industri', color: '#0284c7', buildCost: 3500 },
+    kuliner:   { name: 'Sentra Kuliner', color: '#d97706', buildCost: 4500 },
+    kampus:    { name: 'Zona Pendidikan', color: '#16a34a', buildCost: 5500 },
+    bisnis:    { name: 'Distrik Bisnis', color: '#dc2626', buildCost: 7000 },
+    wisata:    { name: 'Kawasan Wisata', color: '#9333ea', buildCost: 8500 },
+    elit:      { name: 'Kompleks Elit', color: '#0d9488', buildCost: 10000 },
+    pusat:     { name: 'Ring 1 Istana', color: '#eab308', buildCost: 12500 }
+  };
 
-export const LVL_MULT = [5, 15, 32, 60];
+  const BOARD = [
+    { id: 0,  type: 'start',     name: 'BALAI KOTA (START)', price: 0, rent: 0, desc: 'Terima UMR lalu dipotong biaya hidup bulanan.' },
+    { id: 1,  type: 'prop',      group: 'pinggiran', name: 'Gang Senggol', price: 4000, rent: 600, desc: 'Padat merayap, tapi selalu ramai.' },
+    { id: 2,  type: 'kesempatan',name: 'Kesempatan', price: 0, rent: 0, desc: 'Ambil kartu Kesempatan.' },
+    { id: 3,  type: 'prop',      group: 'pinggiran', name: 'Kontrakan Petak', price: 4500, rent: 700, desc: 'Favorit perantau baru.' },
+    { id: 4,  type: 'tax',       name: 'Pajak Penghasilan', price: 0, rent: 0, desc: 'Setor pajak ke Kas Hibah.' },
+    { id: 5,  type: 'kelurahan', name: 'Kantor Kelurahan', price: 0, rent: 0, desc: 'Urus surat: antre atau pelicin.' },
+    { id: 6,  type: 'prop',      group: 'industri', name: 'Pabrik Tekstil', price: 6000, rent: 950, desc: 'Lembur terus sampai pagi.' },
+    { id: 7,  type: 'risiko',    name: 'Kartu Risiko', price: 0, rent: 0, desc: 'Uji nasib warga Konoha.' },
+    { id: 8,  type: 'prop',      group: 'industri', name: 'Gudang Logistik', price: 6500, rent: 1050, desc: 'Pusat distribusi barang.' },
+    { id: 9,  type: 'prop',      group: 'industri', name: 'Kawasan Berikat', price: 7000, rent: 1150, desc: 'Zona industri bebas bea.' },
+    { id: 10, type: 'jail',      name: 'Rutan Nusakambangan', price: 0, rent: 0, desc: 'Cuma lewat, kecuali kena ciduk.' },
+    { id: 11, type: 'prop',      group: 'kuliner', name: 'Warteg Bahari', price: 8000, rent: 1300, desc: 'Penyelamat tanggal tua.' },
+    { id: 12, type: 'tilang',    name: 'Razia Tilang', price: 0, rent: 0, desc: 'Siapkan surat-surat kendaraan.' },
+    { id: 13, type: 'prop',      group: 'kuliner', name: 'Kopi Senja', price: 8500, rent: 1400, desc: 'Tempat nongkrong diskusi startup.' },
+    { id: 14, type: 'prop',      group: 'kuliner', name: 'Pujasera Alun-Alun', price: 9000, rent: 1500, desc: 'Kuliner malam tak pernah tidur.' },
+    { id: 15, type: 'pejabat',   name: 'Kantor Pejabat', price: 0, rent: 0, desc: 'Lobi tender proyek negara.' },
+    { id: 16, type: 'prop',      group: 'kampus', name: 'Kos Eksklusif', price: 10000, rent: 1650, desc: 'WiFi kencang, parkir luas.' },
+    { id: 17, type: 'kesempatan',name: 'Kesempatan', price: 0, rent: 0, desc: 'Ambil kartu Kesempatan.' },
+    { id: 18, type: 'prop',      group: 'kampus', name: 'Fotokopi & Print', price: 10500, rent: 1750, desc: 'Cetak skripsi 24 jam.' },
+    { id: 19, type: 'prop',      group: 'kampus', name: 'Rektorat Swasta', price: 11500, rent: 1900, desc: 'Uang pangkal naik tiap tahun.' },
+    { id: 20, type: 'hibah',     name: 'Dana Hibah', price: 0, rent: 0, desc: 'Klaim seluruh saldo Kas Hibah!' },
+    { id: 21, type: 'prop',      group: 'bisnis', name: 'Menara Sudirman', price: 13000, rent: 2200, desc: 'Perkantoran elit ibu kota.' },
+    { id: 22, type: 'risiko',    name: 'Kartu Risiko', price: 0, rent: 0, desc: 'Ambil kartu Risiko.' },
+    { id: 23, type: 'prop',      group: 'bisnis', name: 'Bursa Efek Konoha', price: 14000, rent: 2400, desc: 'Saham gorengan tiap hari.' },
+    { id: 24, type: 'prop',      group: 'bisnis', name: 'Mal Mega Kuningan', price: 15000, rent: 2600, desc: 'Pusat belanja kaum sosialita.' },
+    { id: 25, type: 'kelurahan', name: 'Samsat Keliling', price: 0, rent: 0, desc: 'Perpanjang pajak atau bayar calo.' },
+    { id: 26, type: 'prop',      group: 'wisata', name: 'Pantai Pasir Putih', price: 16500, rent: 2850, desc: 'Tiket masuk + parkir berlapis.' },
+    { id: 27, type: 'prop',      group: 'wisata', name: 'Villa Puncak', price: 17500, rent: 3050, desc: 'Macet total tiap akhir pekan.' },
+    { id: 28, type: 'tilang',    name: 'Operasi Patuh', price: 0, rent: 0, desc: 'Razia gabungan akhir bulan.' },
+    { id: 29, type: 'prop',      group: 'wisata', name: 'Resor Nusa Dua', price: 18500, rent: 3250, desc: 'Tarif dolar rasa lokal.' },
+    { id: 30, type: 'ciduk',     name: 'DICIDUK APARAT!', price: 0, rent: 0, desc: 'Langsung menuju Rutan!' },
+    { id: 31, type: 'prop',      group: 'elit', name: 'Menteng Residence', price: 20000, rent: 3600, desc: 'Kawasan hunian pejabat senior.' },
+    { id: 32, type: 'prop',      group: 'elit', name: 'Pondok Indah', price: 21500, rent: 3900, desc: 'Rumah megah pagar tinggi.' },
+    { id: 33, type: 'kesempatan',name: 'Kesempatan', price: 0, rent: 0, desc: 'Ambil kartu Kesempatan.' },
+    { id: 34, type: 'prop',      group: 'elit', name: 'PIK Boulevard', price: 23000, rent: 4200, desc: 'Kawasan reklamasi super elit.' },
+    { id: 35, type: 'pejabat',   name: 'Kementerian Proyek', price: 0, rent: 0, desc: 'Tender strategis nasional.' },
+    { id: 36, type: 'risiko',    name: 'Kartu Risiko', price: 0, rent: 0, desc: 'Ambil kartu Risiko.' },
+    { id: 37, type: 'prop',      group: 'pusat', name: 'Istana Negara', price: 26000, rent: 4800, desc: 'Pusat kekuasaan Negeri Konoha.' },
+    { id: 38, type: 'tax',       name: 'Pajak Barang Mewah', price: 0, rent: 0, desc: 'Pungutan khusus sultan.' },
+    { id: 39, type: 'prop',      group: 'pusat', name: 'Ibu Kota Nusantara', price: 30000, rent: 5600, desc: 'Proyek mercusuar masa depan.' }
+  ];
 
-// Kartu Kesempatan (25)
-export const DECK_KESEMPATAN = [
-  { text: 'Jalan Rusak Viral! Gubernur panik dan memperbaiki jalanmu.', type: 'CASH', amount: 8000 },
-  { text: 'Endorse Produk Lokal masuk, bayaran lumayan.', type: 'CASH', amount: 5000 },
-  { text: 'Juara Panjat Pinang Tingkat Kecamatan!', type: 'CASH', amount: 3000 },
-  { text: 'Proyek Mangkrak Akhirnya Dibayar.', type: 'CASH', amount: 15000 },
-  { text: 'Sertifikat Pagar Laut dijual ke pengembang.', type: 'CASH', amount: 18000 },
-  { text: 'THR Cair dari Tempat Kerja.', type: 'CASH', amount: 7000 },
-  { text: 'Dapat Warisan Tante dari Belanda.', type: 'CASH', amount: 20000 },
-  { text: 'Menang Undian Bank BUMN.', type: 'CASH', amount: 10000 },
-  { text: 'Jadi Buzzer Bayaran, dapat dana segar dari yang terkayu.', type: 'BUZZER' },
-  { text: 'Dapat Proyek Bansos Sembako.', type: 'CASH', amount: 12000 },
-  { text: 'Es Teh Viral Laris Manis di Pinggir Jalan.', type: 'CASH', amount: 4000 },
-  { text: 'Insentif Kartu Prakerja Cair.', type: 'CASH', amount: 3500 },
-  { text: 'Kenal Orang Dalam di Kepolisian.', type: 'JAIL_CARD' },
-  { text: 'Kenal Jaksa Senior.', type: 'JAIL_CARD' },
-  { text: 'Naik Kereta Cepat Gratis ke Transportasi Terdekat.', type: 'MOVE_TRANS' },
-  { text: 'Jalan-jalan ke Menteng, mengagumi rumah pejabat.', type: 'MOVE_TO', pos: 39 },
-  { text: 'Pindah ke IKN untuk investasi masa depan.', type: 'MOVE_TO', pos: 14 },
-  { text: 'Mudik Gratis dari BUMN, maju 5 petak.', type: 'MOVE_REL', steps: 5 },
-  { text: 'Pulang Kampung! Maju ke tanah milikmu terdekat.', type: 'MOVE_OWNED' },
-  { text: 'Renovasi Rumah dari Dana CSR Perusahaan.', type: 'UPGRADE_FREE' },
-  { text: 'Lapor ke KPK! Pemain teratas diperiksa.', type: 'KPK_ATTACK' },
-  { text: 'Bawa Satpol PP! Gusur tanah kosong lawan termahal.', type: 'GUSUR_OPP' },
-  { text: 'Main Slot Gacor! (Bisa menang / kalah).', type: 'SLOT' },
-  { text: 'Rombongan Pejabat Lewat! Mundur 3 petak.', type: 'MOVE_REL', steps: -3 },
-  { text: 'Hoaks Kamu Viral! Dapat royalti klikbaite.', type: 'CASH', amount: 6000 }
-];
+  const CHANCE_CARDS = [
+    { id: 'c1', title: 'Bansos Cair!', desc: 'Dana bantuan sosial mendarat di rekening (+Rp6jt × inflasi).', kind: 'cash', mult: 6000 },
+    { id: 'c2', title: 'Dividen BUMN', desc: 'Bagi hasil proyek infrastruktur (+Rp8jt × inflasi).', kind: 'cash', mult: 8000 },
+    { id: 'c3', title: 'Kartu Sakti Bebas Rutan', desc: 'Simpan kartu ini untuk keluar gratis dari Rutan!', kind: 'jail_card' },
+    { id: 'c4', title: 'Maju ke START', desc: 'Langsung meluncur ke Balai Kota (START).', kind: 'goto', target: 0 },
+    { id: 'c5', title: 'Klaim Dana Hibah', desc: 'Menuju petak Dana Hibah sekarang juga!', kind: 'goto', target: 20 },
+    { id: 'c6', title: 'Tender Tanpa Lelang', desc: 'Dapat komisi proyek (+Rp10jt × inflasi).', kind: 'cash', mult: 10000 }
+  ];
 
-// Kartu Risiko (21)
-export const DECK_RISIKO = [
-  { text: 'Kena OTT KPK karena ketahuan bagi-bagi proyek!', type: 'JAIL' },
-  { text: 'PHK Massal di Perusahaan Startup!', type: 'CASH', amount: -8000 },
-  { text: 'Investasi Bodong Kripto Bodong Krismon!', type: 'CASH', amount: -12000 },
-  { text: 'Banjir Kiriman! Biaya perbaikan per bangunan.', type: 'REPAIR_FEE', cost: 2000 },
-  { text: 'Pinjol Menagih dengan Bunga Mencekik!', type: 'CASH', amount: -6000 },
-  { text: 'Harga Beras Naik 30%!', type: 'CASH', amount: -4000 },
-  { text: 'Potongan Iuran Tapera Otomatis.', type: 'CASH', amount: -3500 },
-  { text: 'Iuran BPJS Kesehatan Naik Lagi.', type: 'CASH', amount: -3000 },
-  { text: 'Tilang Elektronik (ETLE) Melayang.', type: 'CASH', amount: -2500 },
-  { text: 'Bayar Uang Keamanan Ormas Lokal.', type: 'CASH', amount: -4000 },
-  { text: 'Pajak Bumi dan Bangunan Naik.', type: 'CASH', amount: -5000 },
-  { text: 'Gempa Bumi! Bangunan tertinggimu turun 1 level.', type: 'DOWNGRADE' },
-  { text: 'Kecopetan Dompet di KRL Jabodetabek.', type: 'CASH', amount: -3000 },
-  { text: 'Dibegal di Jalan Lintas Sumatra.', type: 'CASH', amount: -7000 },
-  { text: 'Utang Teman Ditagih Tapi Dihapus.', type: 'CASH', amount: -4500 },
-  { text: 'Digusur Satpol PP! Tanah kosongmu disita.', type: 'DISITA_SATPOL' },
-  { text: 'Dipanggil Kelurahan untuk Klarifikasi Berkas.', type: 'MOVE_TO', pos: 33 },
-  { text: 'Ijazah Dipertanyakan, Bayar Pengacara.', type: 'CASH', amount: -9000 },
-  { text: 'Kena Proyek Tol! Bangunan digusur ganti rugi seadanya.', type: 'GUSUR_TOL' },
-  { text: 'Arisan RT Bayar Iuran Bulanan.', type: 'CASH', amount: -2000 },
-  { text: 'Bansos Dipotong Oknum Kelurahan.', type: 'CASH', amount: -1500 }
-];
+  const RISK_CARDS = [
+    { id: 'r1', title: 'Salah Transfer Pajak', desc: 'Setor denda administrasi ke Kas Hibah (−Rp5jt × inflasi).', kind: 'pay_hibah', mult: 5000 },
+    { id: 'r2', title: 'Harga BBM Naik', desc: 'Biaya transportasi membengkak (−Rp4jt × inflasi).', kind: 'pay_hibah', mult: 4000 },
+    { id: 'r3', title: 'Kena OTT Mendadak!', desc: 'Langsung masuk Rutan Nusakambangan!', kind: 'jail' },
+    { id: 'r4', title: 'Renovasi Paksa', desc: 'Bayar perawatan Rp1,5jt × inflasi per bangunan milikmu.', kind: 'repair', mult: 1500 },
+    { id: 'r5', title: 'Mundur 3 Langkah', desc: 'Jalanan dialihkan karena iring-iringan pejabat.', kind: 'back', steps: 3 },
+    { id: 'r6', title: 'Pungli Parkir Liar', desc: 'Bayar uang keamanan ke Kas Hibah (−Rp3,5jt × inflasi).', kind: 'pay_hibah', mult: 3500 }
+  ];
 
-export function M(state, n) {
-  let inflEff = state.infl;
-  if (state.decree === 'CETAK_UANG') inflEff *= 6.0;
-  const val = Math.round((n * inflEff) / 50) * 50;
-  return Math.max(50, val);
-}
+  const DECREES = [
+    { id: 'd_triple', icon: '🎲', title: 'Dekret Dadu Tiga', desc: 'Semua warga melempar 3 dadu sekaligus selama 3 putaran!' },
+    { id: 'd_tax', icon: '💸', title: 'Pajak Darurat Nasional', desc: 'Semua pajak & denda naik +50% selama 3 putaran.' },
+    { id: 'd_rent', icon: '🏢', title: 'Kenaikan Tarif Sewa', desc: 'Seluruh tarif sewa properti naik +40% selama 3 putaran.' },
+    { id: 'd_subsidi', icon: '🌾', title: 'Subsidi Biaya Hidup', desc: 'Biaya hidup saat lewat START didiskon 50% selama 3 putaran.' }
+  ];
 
-export function initGame(playersCount = 4, playerNames = []) {
-  const colors = ['#E63946', '#1D8CF0', '#F2B705', '#22A55B'];
-  const players = [];
-  for (let i = 0; i < playersCount; i++) {
-    players.push({
-      id: i,
-      name: playerNames[i] || `Pemain ${i + 1}`,
-      color: colors[i],
-      cash: 100000,
+  const POLICIES = [
+    { id: 'p_pro_rakyat', icon: '🛡️', title: 'Subsidi Rakyat', desc: 'UMR lewat START +30% selama 10 putaran.' },
+    { id: 'p_pro_investor', icon: '📈', title: 'Karpet Merah Investor', desc: 'Biaya bangun & takeover diskon 25% selama 10 putaran.' },
+    { id: 'p_pajak_tinggi', icon: '🏛️', title: 'Pajak Progresif', desc: 'Sewa properti +25%, pajak masuk Kas Hibah 2× lipat.' }
+  ];
+
+  const DISASTERS = [
+    { id: 'banjir', icon: '🌊', title: 'Banjir Tahunan', groups: ['pinggiran', 'kuliner', 'elit'] },
+    { id: 'macet', icon: '🚧', title: 'Galian Kabel Abadi', groups: ['industri', 'bisnis', 'pusat'] },
+    { id: 'longsor', icon: '⛰️', title: 'Cuaca Ekstrem', groups: ['kampus', 'wisata'] }
+  ];
+
+  const NEWS_ITEMS = [
+    { title: 'Harga Beras & Cabai Meroket', desc: 'Inflasi terus menggerus nilai uang tunai warga.' },
+    { title: 'Investor Borong Lahan Strategis', desc: 'Harga tanah dan tarif sewa ikut terkerek inflasi.' },
+    { title: 'Anggaran Infrastruktur Cair', desc: 'Kontraktor berlomba menaikkan level bangunan.' },
+    { title: 'Pegadaian Ramai Nasabah', desc: 'Warga menggadaikan tanah demi bertahan hidup.' }
+  ];
+
+  function roundMoney(val) {
+    return Math.round(val / 50) * 50;
+  }
+
+  function formatMoney(amount) {
+    const n = Number(amount) || 0;
+    const abs = Math.abs(n);
+    const sign = n < 0 ? '-' : '';
+    if (abs >= 1000) {
+      const jt = abs / 1000;
+      const str = Number.isInteger(jt) ? String(jt) : jt.toFixed(1).replace('.', ',');
+      return `${sign}Rp${str}jt`;
+    }
+    return `${sign}Rp${Math.round(abs)}rb`;
+  }
+
+  function calcMoney(S, baseAmount) {
+    return roundMoney(baseAmount * (S ? S.infl : 1));
+  }
+
+  function getAppraisalInfl(S) {
+    if (S && S.suddenDeath && S.crisisFreezeInfl) {
+      return S.crisisFreezeInfl;
+    }
+    return S ? S.infl : 1;
+  }
+
+  function calcTilePrice(S, idx) {
+    const tile = S.theme.board[idx];
+    if (!tile || !tile.price) return 0;
+    return roundMoney(tile.price * S.infl);
+  }
+
+  function calcBuildCost(S, idx, mode) {
+    const tile = S.theme.board[idx];
+    if (!tile || !tile.group) return 0;
+    const grp = S.theme.groups[tile.group];
+    const polMult = (S.policy && S.policy.id === 'p_pro_investor') ? 0.75 : 1;
+    const modeMult = mode === 'bribe' ? 1.5 : 1;
+    return roundMoney(grp.buildCost * S.infl * polMult * modeMult);
+  }
+
+  function calcAssetValue(S, idx) {
+    const tile = S.theme.board[idx];
+    const ts = S.tiles[idx];
+    if (!tile || !tile.price) return 0;
+    const landVal = calcTilePrice(S, idx);
+    const bldgUnit = tile.group ? roundMoney(S.theme.groups[tile.group].buildCost * S.infl) : 0;
+    return landVal + (ts.level * bldgUnit);
+  }
+
+  function calcSellTileValue(S, idx) {
+    return roundMoney(calcTilePrice(S, idx) * 0.6);
+  }
+
+  function calcSellBuildingValue(S, idx) {
+    const tile = S.theme.board[idx];
+    if (!tile || !tile.group) return 0;
+    return roundMoney(S.theme.groups[tile.group].buildCost * S.infl * 0.5);
+  }
+
+  function calcMortgageValue(S, idx) {
+    const tile = S.theme.board[idx];
+    if (!tile || !tile.price) return 0;
+    return roundMoney(tile.price * getAppraisalInfl(S) * 0.5);
+  }
+
+  function calcRedeemCost(S, idx) {
+    const tile = S.theme.board[idx];
+    if (!tile || !tile.price) return 0;
+    return roundMoney(tile.price * getAppraisalInfl(S) * 0.55);
+  }
+
+  function calcTakeoverCost(S, idx) {
+    const polMult = (S.policy && S.policy.id === 'p_pro_investor') ? 0.75 : 1;
+    return roundMoney(calcAssetValue(S, idx) * 2 * polMult);
+  }
+
+  function calcRent(S, idx) {
+    const tile = S.theme.board[idx];
+    const ts = S.tiles[idx];
+    if (!tile || !tile.rent) return 0;
+    if (ts && ts.mortgaged > 0) return 0;
+
+    const lvl = ts ? ts.level : 0;
+    let rent = tile.rent * (LVL_RENT_MULT[lvl] || 1) * S.infl;
+
+    if (ts && ts.owner && tile.group) {
+      const groupTiles = S.theme.board.filter(t => t.group === tile.group);
+      const ownsAll = groupTiles.every(t => S.tiles[t.id].owner === ts.owner && S.tiles[t.id].mortgaged === 0);
+      if (ownsAll) rent *= 1.35;
+    }
+
+    if (S.decree && S.decree.id === 'd_rent') rent *= 1.4;
+    if (S.policy && S.policy.id === 'p_pajak_tinggi') rent *= 1.25;
+    if (S.disaster && tile.group && S.disaster.groups.includes(tile.group)) rent *= 0.5;
+
+    return roundMoney(rent);
+  }
+
+  function createInitialState(playerSpecsOrOpts) {
+    const rawList = Array.isArray(playerSpecsOrOpts)
+      ? playerSpecsOrOpts
+      : ((playerSpecsOrOpts && playerSpecsOrOpts.players) || []);
+
+    const players = rawList.map((p, idx) => ({
+      id: p.id || `p${idx + 1}`,
+      name: p.name || `Pemain ${idx + 1}`,
+      color: p.color || ['#ef4444', '#3b82f6', '#10b981', '#f59e0b'][idx % 4],
+      isBot: Boolean(p.isBot),
+      cash: 45000,
       pos: 0,
       jail: 0,
-      jailCard: 0,
-      hasPinjol: false,
-      isBankrupt: false,
-      isBot: true,
-      afk: false
-    });
-  }
+      jailCards: 0,
+      skipTurn: false,
+      pinjolDebt: 0,
+      pinjolUsed: false,
+      bankrupt: false
+    }));
 
-  const props = {};
-  BOARD.forEach(tile => {
-    if (tile.type === 'prop' || tile.type === 'trans') {
-      props[tile.id] = {
-        owner: null,
-        lvl: 0,
-        mortgaged: false,
-        mortgageRoundsLeft: 0,
-        frozenVal: null
-      };
-    }
-  });
+    const tiles = BOARD.map(() => ({
+      owner: null,
+      level: 0,
+      mortgaged: 0
+    }));
 
-  return {
-    round: 1,
-    turnIdx: 0,
-    phase: 'roll',
-    infl: 1.0,
-    hibahPool: 0,
-    doubleCount: 0,
-    policy: null,
-    decree: null,
-    decreeRoundsLeft: 0,
-    berita: null,
-    bencana: null,
-    bencanaRoundsLeft: 0,
-    krismon: false,
-    players,
-    props,
-    ev: [],
-    evSeq: 0,
-    winner: null,
-    pendingAction: null,
-    votingState: null
-  };
-}
-
-export function applyAction(state, actorId, action) {
-  const S = JSON.parse(JSON.stringify(state));
-  S.ev = [];
-
-  const player = S.players[actorId];
-  if (!player || player.isBankrupt || S.phase === 'gameover') return S;
-
-  if (action.type === 'VOTE_POLICY') {
-    if (S.votingState && S.votingState.active) {
-      S.votingState.votes[actorId] = action.policy;
-      S.votingState.bribes[actorId] = action.bribe || 0;
-
-      if (action.bribe > 0) {
-        deductCash(S, player, action.bribe, 'Serangan Fajar Pemilu');
-      }
-
-      const totalVotesNeeded = S.players.filter(p => !p.isBankrupt).length;
-      if (Object.keys(S.votingState.votes).length >= totalVotesNeeded) {
-        // Tentukan pemenang pemilu
-        const counts = {};
-        Object.keys(S.votingState.votes).forEach(pid => {
-          const pol = S.votingState.votes[pid];
-          const bribeBonus = Math.floor((S.votingState.bribes[pid] || 0) / 5000);
-          counts[pol] = (counts[pol] || 0) + 1 + Math.min(2, bribeBonus);
-        });
-
-        let winPolicy = Object.keys(counts)[0];
-        let maxV = -1;
-        Object.keys(counts).forEach(pol => {
-          if (counts[pol] > maxV) {
-            maxV = counts[pol];
-            winPolicy = pol;
-          }
-        });
-
-        S.policy = winPolicy;
-        S.votingState = null;
-        S.ev.push({ k: 'notif', text: `🗳️ Hasil Pemilu: Kebijakan ${winPolicy} Berlaku!` });
-      }
-    }
-    return S;
-  }
-
-  if (action.type === 'ROLL') {
-    if (S.turnIdx !== actorId || S.phase !== 'roll') return S;
-
-    const d1 = action.d1 || Math.floor(Math.random() * 6) + 1;
-    const d2 = action.d2 || Math.floor(Math.random() * 6) + 1;
-    const totalDice = d1 + d2;
-    const isDouble = d1 === d2;
-
-    S.ev.push({ k: 'dice', pid: actorId, d1, d2 });
-
-    if (isDouble) {
-      S.doubleCount++;
-      if (S.doubleCount >= 3) {
-        S.doubleCount = 0;
-        sendToJail(S, player, 'Dadu dobel 3 kali');
-        endTurn(S);
-        return S;
-      }
-    } else {
-      S.doubleCount = 0;
-    }
-
-    if (player.jail > 0) {
-      handleJailRoll(S, player, isDouble, action.choice);
-      endTurn(S);
-      return S;
-    }
-
-    let moveDist = totalDice;
-    if (S.decree === 'DADU_TIGA') moveDist += Math.floor(Math.random() * 6) + 1;
-    if (S.decree === 'EFF_DADU') moveDist = Math.floor(Math.random() * 6) + 1;
-    if (S.decree === 'MUNDUR') moveDist = -moveDist;
-
-    movePlayer(S, player, moveDist);
-    return S;
-  }
-
-  if (action.type === 'DECIDE') {
-    if (S.turnIdx !== actorId || S.phase !== 'decide') return S;
-    handlePlayerChoice(S, player, action.choice);
-    endTurn(S);
-    return S;
-  }
-
-  if (action.type === 'MORTGAGE') {
-    mortgageProp(S, player, action.tileId);
-    return S;
-  }
-
-  if (action.type === 'UNMORTGAGE') {
-    unmortgageProp(S, player, action.tileId);
-    return S;
-  }
-
-  return S;
-}
-
-function movePlayer(S, player, steps) {
-  const oldPos = player.pos;
-  let newPos = (oldPos + steps + 40) % 40;
-
-  if (steps > 0 && newPos < oldPos) {
-    let umr = Math.round(13000 * Math.pow(1.02, S.round - 1));
-    if (S.policy === 'NAIK_UMR') umr = Math.round(umr * 1.25);
-    if (S.policy === 'MAKAN_SIANG') umr += 3000;
-    if (S.decree === 'POTONG_GAJI') umr = Math.round(umr * 0.5);
-
-    let livingCost = M(S, 8000);
-    if (S.policy === 'SUBSIDI_HIDUP') livingCost = Math.round(livingCost * 0.6);
-
-    player.cash += umr;
-    S.ev.push({ k: 'cash', pid: player.id, a: umr, w: 'Gajian UMR' });
-
-    deductCash(S, player, livingCost, 'Biaya Hidup');
-
-    if (S.policy === 'PAJAK_TUAN_TANAH') {
-      const ownedCount = Object.values(S.props).filter(p => p.owner === player.id).length;
-      if (ownedCount > 0) {
-        deductCash(S, player, M(S, 700 * ownedCount), 'Pajak Tuan Tanah');
-      }
-    }
-
-    if (player.hasPinjol) {
-      const pinjolBill = Math.round(M(S, 10000) * 1.5);
-      deductCash(S, player, pinjolBill, 'Pelunasan Pinjol');
-      player.hasPinjol = false;
-    }
-  }
-
-  player.pos = newPos;
-  S.ev.push({ k: 'move', pid: player.id, pos: newPos });
-
-  processTileLanding(S, player, newPos);
-}
-
-function processTileLanding(S, player, pos) {
-  const tile = BOARD[pos];
-
-  if (tile.type === 'prop' || tile.type === 'trans') {
-    const pData = S.props[pos];
-    if (pData.owner === null) {
-      S.phase = 'decide';
-      S.pendingAction = { type: 'BUY_LAND', tileId: pos, price: M(S, tile.price) };
-    } else if (pData.owner === player.id) {
-      if (!pData.mortgaged && pData.lvl < 3 && tile.type === 'prop') {
-        const groupInfo = GROUPS[tile.group];
-        S.phase = 'decide';
-        S.pendingAction = { type: 'UPGRADE_BUILDING', tileId: pos, cost: M(S, groupInfo.buildCost) };
-      } else {
-        endTurn(S);
-      }
-    } else {
-      if (!pData.mortgaged && S.decree !== 'LIBUR_NASIONAL' && S.bencana !== 'BANJIR') {
-        let rent = calculateRent(S, pos);
-        deductCash(S, player, rent, `Sewa ${tile.name}`, pData.owner);
-
-        if (pData.lvl < 3 && player.cash >= calculateTakeoverPrice(S, pos)) {
-          S.phase = 'decide';
-          S.pendingAction = { type: 'TAKEOVER', tileId: pos, price: calculateTakeoverPrice(S, pos) };
-          return;
+    return {
+      round: 1,
+      infl: 1.0,
+      hibah: 10000,
+      suddenDeath: false,
+      crisisFreezeInfl: null,
+      phase: 'roll',
+      turnIdx: 0,
+      winner: null,
+      doublesCount: 0,
+      theme: {
+        board: BOARD,
+        groups: GROUPS,
+        economy: {
+          umrBase: 6000,
+          livingCostBase: 2500,
+          bailBase: 4000,
+          jailBribeBase: 3000,
+          kelurahanBribeBase: 2500,
+          pejabatTributeBase: 5000,
+          tilangFineBase: 3000,
+          tilangBribeBase: 1800
         }
-      }
-      endTurn(S);
-    }
-  } else if (tile.type === 'ciduk') {
-    S.phase = 'decide';
-    S.pendingAction = { type: 'CIDUK_CHOICE' };
-  } else if (tile.type === 'pejabat') {
-    S.phase = 'decide';
-    S.pendingAction = { type: 'PEJABAT_CHOICE' };
-  } else if (tile.type === 'lurah') {
-    S.phase = 'decide';
-    S.pendingAction = { type: 'LURAH_CHOICE' };
-  } else if (tile.type === 'tilang') {
-    S.phase = 'decide';
-    S.pendingAction = { type: 'TILANG_CHOICE' };
-  } else if (tile.type === 'ppn') {
-    let tax = Math.max(M(S, 2000), Math.round(player.cash * 0.12));
-    deductCash(S, player, tax, 'PPN 12%');
-    S.hibahPool += tax;
-    endTurn(S);
-  } else if (tile.type === 'hibah') {
-    if (S.hibahPool > 0) {
-      player.cash += S.hibahPool;
-      S.ev.push({ k: 'cash', pid: player.id, a: S.hibahPool, w: 'Cairkan Dana Hibah' });
-      S.hibahPool = 0;
-    }
-    endTurn(S);
-  } else if (tile.type === 'kesempatan' || tile.type === 'risiko') {
-    drawCard(S, player, tile.type);
-    endTurn(S);
-  } else {
-    endTurn(S);
-  }
-}
-
-function calculateRent(S, tileId) {
-  const tile = BOARD[tileId];
-  const pData = S.props[tileId];
-
-  if (tile.type === 'trans') {
-    if (S.policy === 'TRANSPORT_GRATIS') return 0;
-    const transOwned = BOARD.filter(b => b.type === 'trans' && S.props[b.id].owner === pData.owner).length;
-    return M(S, 1650 * Math.pow(2, transOwned - 1));
-  }
-
-  let rent = M(S, tile.rent * LVL_MULT[pData.lvl]);
-  const groupMembers = GROUPS[tile.group].members;
-  const ownsAll = groupMembers.every(id => S.props[id].owner === pData.owner);
-  if (ownsAll) rent *= 2;
-  if (S.policy === 'PROYEK_MERCUSUAR' && pData.lvl > 0) rent = Math.round(rent * 1.5);
-  if (S.decree === 'PAJAK_NASIONALISME') rent *= 3;
-  return rent;
-}
-
-function calculateTakeoverPrice(S, tileId) {
-  const tile = BOARD[tileId];
-  const pData = S.props[tileId];
-  const groupCost = GROUPS[tile.group].buildCost;
-  const currentLandPrice = M(S, tile.price);
-  const totalBuildCost = pData.lvl * M(S, groupCost);
-  return 2 * (currentLandPrice + totalBuildCost);
-}
-
-function handlePlayerChoice(S, player, choice) {
-  const pAct = S.pendingAction;
-  if (!pAct) return;
-
-  if (pAct.type === 'BUY_LAND') {
-    if (choice === 'BUY' && player.cash >= pAct.price) {
-      deductCash(S, player, pAct.price, `Beli Tanah ${BOARD[pAct.tileId].name}`);
-      S.props[pAct.tileId].owner = player.id;
-    }
-  } else if (pAct.type === 'UPGRADE_BUILDING') {
-    if (choice === 'OFFICIAL') {
-      const isAutoPass = S.policy === 'OMNIBUS';
-      const rollSuccess = isAutoPass || Math.random() >= 0.3;
-      if (rollSuccess) {
-        if (player.cash >= pAct.cost) {
-          deductCash(S, player, pAct.cost, 'Bangun Izin Resmi');
-          S.props[pAct.tileId].lvl++;
-        }
-      } else {
-        const waste = M(S, Math.round(pAct.cost * 0.2));
-        deductCash(S, player, waste, 'Berkas Kurang Satu (Hangus)');
-      }
-    } else if (choice === 'PELICIN') {
-      const pelicinCost = Math.round(pAct.cost * 1.5);
-      if (player.cash >= pelicinCost) {
-        deductCash(S, player, pelicinCost, 'Uang Pelicin Bangunan');
-        S.props[pAct.tileId].lvl++;
-      }
-    }
-  } else if (pAct.type === 'TAKEOVER') {
-    if (choice === 'TAKEOVER' && player.cash >= pAct.price) {
-      const oldOwner = S.props[pAct.tileId].owner;
-      deductCash(S, player, pAct.price, 'Takeover Properti', oldOwner);
-      S.props[pAct.tileId].owner = player.id;
-    }
-  } else if (pAct.type === 'CIDUK_CHOICE') {
-    if (choice === 'SOGOK' && player.cash >= M(S, 8000)) {
-      deductCash(S, player, M(S, 8000), 'Uang Sogok Penyidik');
-      if (Math.random() < 0.5) {
-        S.ev.push({ k: 'notif', text: 'Sogokan berhasil! Kamu lolos.' });
-      } else {
-        sendToJail(S, player, 'Sogokan Ketahuan!');
-      }
-    } else {
-      sendToJail(S, player, 'Pasrah Diciduk');
-    }
-  } else if (pAct.type === 'PEJABAT_CHOICE') {
-    if (choice === 'UPETI' && player.cash >= M(S, 8000)) {
-      deductCash(S, player, M(S, 8000), 'Setor Upeti Pejabat');
-      const roll = Math.random();
-      if (roll < 0.55) {
-        const reward = M(S, 20000);
-        player.cash += reward;
-        S.ev.push({ k: 'cash', pid: player.id, a: reward, w: 'Menang Tender Proyek' });
-      } else if (roll < 0.75) {
-        S.ev.push({ k: 'notif', text: 'Zonk! Upeti dimakan pejabat tanpa tender.' });
-      } else {
-        sendToJail(S, player, 'Kena OTT di Kantor Pejabat');
-      }
-    }
-  } else if (pAct.type === 'TILANG_CHOICE') {
-    if (choice === 'DAMAI' && player.cash >= M(S, 2500)) {
-      deductCash(S, player, M(S, 2500), 'Uang Damai Tilang');
-      if (Math.random() < 0.25) {
-        S.ev.push({ k: 'notif', text: 'Damai terekam kamera warga dan viral! Kena sanksi.' });
-        deductCash(S, player, M(S, 3000), 'Denda Viral');
-      }
-    } else if (choice === 'RESMI' && player.cash >= M(S, 6500)) {
-      deductCash(S, player, M(S, 6500), 'Denda Resmi Tilang');
-      S.hibahPool += M(S, 6500);
-    }
-  }
-  S.pendingAction = null;
-}
-
-function deductCash(S, player, amount, reason, targetPid = null) {
-  player.cash -= amount;
-  S.ev.push({ k: 'cash', pid: player.id, a: -amount, w: reason });
-
-  if (targetPid !== null && targetPid !== undefined) {
-    const target = S.players[targetPid];
-    if (target && !target.isBankrupt) {
-      target.cash += amount;
-      S.ev.push({ k: 'cash', pid: target.id, a: amount, w: `Penerimaan ${reason}` });
-    }
-  }
-
-  if (player.cash < 0) {
-    handleDistressPipeline(S, player, targetPid);
-  }
-}
-
-function handleDistressPipeline(S, player, creditorPid) {
-  const ownedProps = Object.keys(S.props).filter(id => S.props[id].owner === player.id);
-  for (const id of ownedProps) {
-    const pData = S.props[id];
-    while (pData.lvl > 0 && player.cash < 0) {
-      const buildCost = GROUPS[BOARD[id].group].buildCost;
-      const refund = Math.round(M(S, buildCost) * 0.5);
-      pData.lvl--;
-      player.cash += refund;
-      S.ev.push({ k: 'cash', pid: player.id, a: refund, w: `Jual Bangunan ${BOARD[id].name}` });
-    }
-  }
-
-  if (player.cash < 0) {
-    for (const id of ownedProps) {
-      const pData = S.props[id];
-      if (pData.lvl === 0 && !pData.mortgaged && player.cash < 0) {
-        mortgageProp(S, player, id);
-      }
-    }
-  }
-
-  if (player.cash < 0 && !player.hasPinjol) {
-    const pinjolAmount = M(S, 10000);
-    player.cash += pinjolAmount;
-    player.hasPinjol = true;
-    S.ev.push({ k: 'cash', pid: player.id, a: pinjolAmount, w: 'Pinjol Darurat' });
-  }
-
-  if (player.cash < 0) {
-    player.isBankrupt = true;
-    player.cash = 0;
-    S.ev.push({ k: 'bankrupt', pid: player.id });
-
-    ownedProps.forEach(id => {
-      const pData = S.props[id];
-      if (creditorPid !== null && creditorPid !== undefined && !S.players[creditorPid].isBankrupt) {
-        pData.owner = creditorPid;
-      } else {
-        pData.owner = null;
-        pData.lvl = 0;
-        pData.mortgaged = false;
-      }
-    });
-  }
-}
-
-function mortgageProp(S, player, tileId) {
-  const pData = S.props[tileId];
-  if (!pData || pData.owner !== player.id || pData.mortgaged || pData.lvl > 0) return;
-
-  const tilePrice = S.krismon && pData.frozenVal ? pData.frozenVal : M(S, BOARD[tileId].price);
-  const payout = Math.round(tilePrice * 0.5);
-
-  pData.mortgaged = true;
-  pData.mortgageRoundsLeft = 4;
-  pData.frozenVal = tilePrice;
-
-  player.cash += payout;
-  S.ev.push({ k: 'cash', pid: player.id, a: payout, w: `Gadai ${BOARD[tileId].name}` });
-}
-
-function unmortgageProp(S, player, tileId) {
-  const pData = S.props[tileId];
-  if (!pData || pData.owner !== player.id || !pData.mortgaged) return;
-
-  const tilePrice = S.krismon && pData.frozenVal ? pData.frozenVal : M(S, BOARD[tileId].price);
-  const redeemCost = Math.round(tilePrice * 0.55);
-
-  if (player.cash >= redeemCost) {
-    deductCash(S, player, redeemCost, `Tebus Gadai ${BOARD[tileId].name}`);
-    pData.mortgaged = false;
-    pData.mortgageRoundsLeft = 0;
-  }
-}
-
-function sendToJail(S, player, reason) {
-  player.jail = 3;
-  player.pos = 10;
-  S.ev.push({ k: 'jail', pid: player.id, reason });
-}
-
-function handleJailRoll(S, player, isDouble, choice) {
-  if (choice === 'PAY' && player.cash >= M(S, 3000)) {
-    deductCash(S, player, M(S, 3000), 'Jaminan Rutan');
-    player.jail = 0;
-  } else if (choice === 'BRIBE' && player.cash >= M(S, 1500)) {
-    deductCash(S, player, M(S, 1500), 'Suap Sipir');
-    if (Math.random() >= 0.3) {
-      player.jail = 0;
-    }
-  } else if (choice === 'CARD' && player.jailCard > 0) {
-    player.jailCard--;
-    player.jail = 0;
-  } else if (isDouble) {
-    player.jail = 0;
-  } else {
-    player.jail--;
-  }
-}
-
-function drawCard(S, player, deckType) {
-  const deck = deckType === 'kesempatan' ? DECK_KESEMPATAN : DECK_RISIKO;
-  const card = deck[Math.floor(Math.random() * deck.length)];
-
-  S.ev.push({ k: 'card', pid: player.id, text: card.text });
-
-  if (card.type === 'CASH') {
-    if (card.amount > 0) {
-      const gain = M(S, card.amount);
-      player.cash += gain;
-      S.ev.push({ k: 'cash', pid: player.id, a: gain, w: card.text });
-    } else {
-      const loss = M(S, Math.abs(card.amount));
-      deductCash(S, player, loss, card.text);
-    }
-  } else if (card.type === 'JAIL') {
-    sendToJail(S, player, card.text);
-  } else if (card.type === 'JAIL_CARD') {
-    player.jailCard++;
-  } else if (card.type === 'MOVE_TO') {
-    player.pos = card.pos;
-    processTileLanding(S, player, card.pos);
-  } else if (card.type === 'MOVE_REL') {
-    player.pos = (player.pos + card.steps + 40) % 40;
-    processTileLanding(S, player, player.pos);
-  }
-}
-
-function endTurn(S) {
-  S.phase = 'roll';
-  S.pendingAction = null;
-
-  const activePlayers = S.players.filter(p => !p.isBankrupt);
-  if (activePlayers.length <= 1) {
-    S.phase = 'gameover';
-    S.winner = activePlayers[0] ? activePlayers[0].id : null;
-    return;
-  }
-
-  let nextIdx = (S.turnIdx + 1) % S.players.length;
-  while (S.players[nextIdx].isBankrupt) {
-    nextIdx = (nextIdx + 1) % S.players.length;
-  }
-
-  if (nextIdx <= S.turnIdx) {
-    advanceRound(S);
-  }
-
-  S.turnIdx = nextIdx;
-}
-
-function advanceRound(S) {
-  S.round++;
-
-  let rate = 0.022 + Math.min(0.01, S.round * 0.0004);
-  if (S.policy === 'MAKAN_SIANG') rate += 0.01;
-
-  if (S.round >= 40) {
-    S.krismon = true;
-    rate += 1.0;
-  }
-
-  S.infl *= (1 + rate);
-
-  Object.keys(S.props).forEach(id => {
-    const pData = S.props[id];
-    if (pData.mortgaged) {
-      pData.mortgageRoundsLeft--;
-      if (pData.mortgageRoundsLeft <= 0) {
-        pData.owner = null;
-        pData.mortgaged = false;
-        pData.lvl = 0;
-        S.ev.push({ k: 'confiscate', tileId: Number(id) });
-      }
-    }
-  });
-
-  if (S.decreeRoundsLeft > 0) {
-    S.decreeRoundsLeft--;
-    if (S.decreeRoundsLeft <= 0) S.decree = null;
-  }
-
-  if (S.round % 10 === 0) {
-    S.votingState = {
-      active: true,
-      options: ['NAIK_UMR', 'SUBSIDI_HIDUP', 'MAKAN_SIANG', 'PAJAK_TUAN_TANAH', 'OMNIBUS', 'TRANSPORT_GRATIS'],
-      votes: {},
-      bribes: {}
+      },
+      players,
+      tiles,
+      pending: null,
+      voteState: null,
+      news: NEWS_ITEMS[0],
+      decree: null,
+      policy: null,
+      disaster: null,
+      evSeq: 0,
+      ev: []
     };
   }
 
-  if (S.round >= 4 && !S.decree && Math.random() < 0.3) {
-    const decrees = ['MUNDUR', 'DADU_TIGA', 'EFF_DADU', 'CETAK_UANG', 'LIBUR_NASIONAL', 'PAJAK_NASIONALISME', 'POTONG_GAJI'];
-    S.decree = decrees[Math.floor(Math.random() * decrees.length)];
-    S.decreeRoundsLeft = 2;
-    S.ev.push({ k: 'notif', text: `📜 DEKRIT PRESIDEN: ${S.decree} berlaku 2 putaran!` });
+  function cloneState(S) {
+    return JSON.parse(JSON.stringify(S));
   }
-}
+
+  function emit(S, ev) {
+    S.ev.push(ev);
+  }
+
+  function adjustCash(S, pid, delta, reason) {
+    const p = S.players.find(x => x.id === pid);
+    if (!p || p.bankrupt || delta === 0) return;
+
+    p.cash = roundMoney(p.cash + delta);
+    emit(S, { k: 'cash', pid, a: delta, w: reason });
+
+    if (p.cash < 0 && !p.pinjolUsed) {
+      const loan = calcMoney(S, 15000);
+      p.pinjolUsed = true;
+      p.pinjolDebt = roundMoney(loan * 1.5);
+      p.cash = roundMoney(p.cash + loan);
+      emit(S, { k: 'pinjol', pid, a: loan });
+      emit(S, { k: 'cash', pid, a: loan, w: 'Pinjol Darurat' });
+    }
+
+    if (p.cash < 0) {
+      declareBankrupt(S, p);
+    }
+  }
+
+  function declareBankrupt(S, p) {
+    if (p.bankrupt) return;
+    p.bankrupt = true;
+    p.cash = 0;
+    p.jail = 0;
+    p.skipTurn = false;
+    S.tiles.forEach(ts => {
+      if (ts.owner === p.id) {
+        ts.owner = null;
+        ts.level = 0;
+        ts.mortgaged = 0;
+      }
+    });
+    emit(S, { k: 'bankrupt', pid: p.id });
+
+    if (checkWinner(S)) return;
+
+    const active = S.players[S.turnIdx];
+    if (S.phase !== 'vote' && active && active.id === p.id) {
+      advanceTurn(S);
+    }
+  }
+
+  function checkWinner(S) {
+    const alive = S.players.filter(p => !p.bankrupt);
+    if (alive.length <= 1) {
+      S.phase = 'gameover';
+      S.winner = alive[0] ? alive[0].id : null;
+      S.pending = null;
+      S.voteState = null;
+      return true;
+    }
+    return false;
+  }
+
+  function passStart(S, p) {
+    const umrInfl = 1 + (S.infl - 1) * 0.65;
+    const polMult = (S.policy && S.policy.id === 'p_pro_rakyat') ? 1.3 : 1.0;
+    const umr = roundMoney(S.theme.economy.umrBase * umrInfl * polMult);
+    adjustCash(S, p.id, umr, 'Gaji UMR');
+    if (p.bankrupt) return;
+
+    const livingMult = (S.decree && S.decree.id === 'd_subsidi') ? 0.5 : 1.0;
+    const livingCost = roundMoney(S.theme.economy.livingCostBase * S.infl * livingMult);
+    adjustCash(S, p.id, -livingCost, 'Biaya Hidup');
+    if (p.bankrupt) return;
+
+    if (p.pinjolDebt > 0) {
+      const debt = p.pinjolDebt;
+      p.pinjolDebt = 0;
+      adjustCash(S, p.id, -debt, 'Tagihan Pinjol');
+    }
+  }
+
+  function movePlayerSteps(S, p, steps) {
+    const from = p.pos;
+    const rawTo = from + steps;
+    const to = ((rawTo % 40) + 40) % 40;
+    p.pos = to;
+    emit(S, { k: 'move', pid: p.id, from, to, steps });
+
+    if (steps > 0 && rawTo >= 40) {
+      passStart(S, p);
+    }
+    if (!p.bankrupt) {
+      resolveLanding(S, p);
+    }
+  }
+
+  function sendToJail(S, p) {
+    if (p.bankrupt) return;
+    p.pos = 10;
+    p.jail = 3;
+    S.doublesCount = 0;
+    emit(S, { k: 'jail', pid: p.id });
+    advanceTurn(S);
+  }
+
+  function resolveLanding(S, p) {
+    if (p.bankrupt) return;
+    const idx = p.pos;
+    const tile = S.theme.board[idx];
+    const ts = S.tiles[idx];
+
+    if (tile.type === 'start' || tile.type === 'jail') {
+      endOrRepeatTurn(S, p);
+      return;
+    }
+
+    if (tile.type === 'hibah') {
+      const prize = S.hibah;
+      S.hibah = calcMoney(S, 5000);
+      if (prize > 0) adjustCash(S, p.id, prize, 'Dana Hibah');
+      if (!p.bankrupt) endOrRepeatTurn(S, p);
+      return;
+    }
+
+    if (tile.type === 'tax') {
+      const decreeMult = (S.decree && S.decree.id === 'd_tax') ? 1.5 : 1.0;
+      const taxAmt = roundMoney(3500 * S.infl * decreeMult);
+      const hibahMult = (S.policy && S.policy.id === 'p_pajak_tinggi') ? 2 : 1;
+      S.hibah = roundMoney(S.hibah + taxAmt * hibahMult);
+      adjustCash(S, p.id, -taxAmt, tile.name);
+      if (!p.bankrupt) endOrRepeatTurn(S, p);
+      return;
+    }
+
+    if (tile.type === 'ciduk') {
+      S.phase = 'decide';
+      S.pending = {
+        kind: 'ciduk',
+        tile: idx,
+        bribeCost: calcMoney(S, 5000)
+      };
+      return;
+    }
+
+    if (tile.type === 'kelurahan') {
+      S.phase = 'decide';
+      S.pending = {
+        kind: 'kelurahan',
+        tile: idx,
+        bribeCost: calcMoney(S, S.theme.economy.kelurahanBribeBase)
+      };
+      return;
+    }
+
+    if (tile.type === 'pejabat') {
+      S.phase = 'decide';
+      S.pending = {
+        kind: 'pejabat',
+        tile: idx,
+        cost: calcMoney(S, S.theme.economy.pejabatTributeBase)
+      };
+      return;
+    }
+
+    if (tile.type === 'tilang') {
+      S.phase = 'decide';
+      S.pending = {
+        kind: 'tilang',
+        tile: idx,
+        fineCost: calcMoney(S, S.theme.economy.tilangFineBase),
+        bribeCost: calcMoney(S, S.theme.economy.tilangBribeBase)
+      };
+      return;
+    }
+
+    if (tile.type === 'kesempatan' || tile.type === 'risiko') {
+      drawAndResolveCard(S, p, tile.type);
+      return;
+    }
+
+    if (tile.type === 'prop') {
+      if (!ts.owner) {
+        S.phase = 'decide';
+        S.pending = {
+          kind: 'buy',
+          tile: idx,
+          price: calcTilePrice(S, idx)
+        };
+        return;
+      }
+
+      if (ts.owner === p.id) {
+        if (ts.mortgaged === 0 && ts.level < 3) {
+          S.phase = 'decide';
+          S.pending = {
+            kind: 'build',
+            tile: idx,
+            nextLevel: ts.level + 1,
+            officialCost: calcBuildCost(S, idx, 'official'),
+            bribeCost: calcBuildCost(S, idx, 'bribe')
+          };
+          return;
+        }
+        endOrRepeatTurn(S, p);
+        return;
+      }
+
+      const owner = S.players.find(x => x.id === ts.owner);
+      const rent = calcRent(S, idx);
+      if (rent > 0 && owner && !owner.bankrupt) {
+        const maxPayable = Math.max(0, p.cash + (!p.pinjolUsed ? calcMoney(S, 15000) : 0));
+        const receivedByOwner = Math.min(rent, maxPayable);
+        adjustCash(S, p.id, -rent, `Sewa ${tile.name}`);
+        if (receivedByOwner > 0 && !owner.bankrupt) {
+          adjustCash(S, owner.id, receivedByOwner, `Sewa ${tile.name}`);
+        }
+      }
+      if (p.bankrupt) return;
+
+      if (ts.mortgaged === 0 && ts.level < 3) {
+        const toCost = calcTakeoverCost(S, idx);
+        if (p.cash >= toCost) {
+          S.phase = 'decide';
+          S.pending = {
+            kind: 'takeover',
+            tile: idx,
+            owner: ts.owner,
+            cost: toCost
+          };
+          return;
+        }
+      }
+
+      endOrRepeatTurn(S, p);
+    }
+  }
+
+  function drawAndResolveCard(S, p, deckName) {
+    const pool = deckName === 'kesempatan' ? CHANCE_CARDS : RISK_CARDS;
+    const card = pool[Math.floor(Math.random() * pool.length)];
+    emit(S, { k: 'card', pid: p.id, deck: deckName, card: { title: card.title, desc: card.desc } });
+
+    if (card.kind === 'cash') {
+      adjustCash(S, p.id, calcMoney(S, card.mult), card.title);
+      if (!p.bankrupt) endOrRepeatTurn(S, p);
+    } else if (card.kind === 'pay_hibah') {
+      const amt = calcMoney(S, card.mult);
+      S.hibah = roundMoney(S.hibah + amt);
+      adjustCash(S, p.id, -amt, card.title);
+      if (!p.bankrupt) endOrRepeatTurn(S, p);
+    } else if (card.kind === 'jail_card') {
+      p.jailCards += 1;
+      endOrRepeatTurn(S, p);
+    } else if (card.kind === 'jail') {
+      sendToJail(S, p);
+    } else if (card.kind === 'goto') {
+      const steps = (card.target - p.pos + 40) % 40 || 40;
+      movePlayerSteps(S, p, steps);
+    } else if (card.kind === 'back') {
+      const from = p.pos;
+      p.pos = (p.pos - card.steps + 40) % 40;
+      emit(S, { k: 'move', pid: p.id, from, to: p.pos, steps: -card.steps });
+      resolveLanding(S, p);
+    } else if (card.kind === 'repair') {
+      let bldgs = 0;
+      S.tiles.forEach(ts => { if (ts.owner === p.id) bldgs += ts.level; });
+      const total = calcMoney(S, card.mult * bldgs);
+      if (total > 0) {
+        S.hibah = roundMoney(S.hibah + total);
+        adjustCash(S, p.id, -total, card.title);
+      }
+      if (!p.bankrupt) endOrRepeatTurn(S, p);
+    }
+  }
+
+  function endOrRepeatTurn(S, p) {
+    if (S.phase === 'gameover') return;
+    S.pending = null;
+    if (S.doublesCount > 0 && S.doublesCount < 3 && p.jail === 0 && !p.bankrupt) {
+      S.phase = 'roll';
+      return;
+    }
+    advanceTurn(S);
+  }
+
+  function advanceTurn(S) {
+    if (checkWinner(S)) return;
+    S.pending = null;
+    S.doublesCount = 0;
+    S.phase = 'roll';
+
+    const n = S.players.length;
+    let wrappedRound = false;
+    for (let i = 1; i <= n; i++) {
+      const nextIdx = (S.turnIdx + i) % n;
+      if (nextIdx <= S.turnIdx) wrappedRound = true;
+      const candidate = S.players[nextIdx];
+      if (candidate && !candidate.bankrupt) {
+        S.turnIdx = nextIdx;
+        if (wrappedRound) onNewRound(S);
+        if (S.phase === 'gameover' || S.phase === 'vote') return;
+        if (candidate.skipTurn) {
+          candidate.skipTurn = false;
+          advanceTurn(S);
+        }
+        return;
+      }
+    }
+  }
+
+  function onNewRound(S) {
+    S.round += 1;
+
+    if (S.round >= 40) {
+      if (!S.suddenDeath) {
+        S.suddenDeath = true;
+        S.crisisFreezeInfl = S.infl;
+        emit(S, { k: 'crisis_start' });
+      }
+      S.infl = Number((S.infl + 1.0).toFixed(2));
+    } else {
+      if (S.round === 37) {
+        emit(S, { k: 'crisis_warn', targetRound: 40 });
+      }
+      S.infl = Number((S.infl + 0.08).toFixed(2));
+    }
+
+    S.tiles.forEach((ts, idx) => {
+      if (ts.owner && ts.mortgaged > 0) {
+        ts.mortgaged -= 1;
+        if (ts.mortgaged <= 0) {
+          const prevOwner = ts.owner;
+          ts.owner = null;
+          ts.level = 0;
+          ts.mortgaged = 0;
+          emit(S, { k: 'seized', pid: prevOwner, tile: idx, w: 'Gadai Hangus' });
+        }
+      }
+    });
+
+    if (S.decree) {
+      S.decree.roundsLeft -= 1;
+      if (S.decree.roundsLeft <= 0) S.decree = null;
+    }
+    if (S.policy) {
+      S.policy.roundsLeft -= 1;
+      if (S.policy.roundsLeft <= 0) S.policy = null;
+    }
+    if (S.disaster) {
+      S.disaster.roundsLeft -= 1;
+      if (S.disaster.roundsLeft <= 0) S.disaster = null;
+    }
+
+    if (S.round % 3 === 0) {
+      const news = NEWS_ITEMS[Math.floor(Math.random() * NEWS_ITEMS.length)];
+      S.news = news;
+      emit(S, { k: 'news', news });
+    }
+
+    if (S.round % 6 === 0 && !S.decree) {
+      const dec = DECREES[Math.floor(Math.random() * DECREES.length)];
+      S.decree = Object.assign({}, dec, { roundsLeft: 3 });
+      emit(S, { k: 'decree', decree: S.decree });
+    }
+
+    if (S.round % 8 === 0 && !S.disaster) {
+      const dis = DISASTERS[Math.floor(Math.random() * DISASTERS.length)];
+      S.disaster = Object.assign({}, dis, { roundsLeft: 2 });
+      emit(S, { k: 'disaster', disaster: S.disaster });
+    }
+
+    if (S.round % 10 === 0) {
+      S.phase = 'vote';
+      S.voteState = {
+        candidates: POLICIES,
+        votes: {}
+      };
+    }
+  }
+
+  function applyAction(rawState, actorId, action) {
+    const S = cloneState(rawState);
+    S.evSeq += 1;
+    S.ev = [];
+
+    if (S.phase === 'gameover') return S;
+
+    if (S.phase !== 'vote' && S.players[S.turnIdx] && S.players[S.turnIdx].bankrupt) {
+      advanceTurn(S);
+      return S;
+    }
+
+    if (S.phase === 'vote' && S.voteState) {
+      const voter = S.players.find(p => p.id === actorId);
+      if (!voter || voter.bankrupt || S.voteState.votes[actorId]) return S;
+
+      const idx = action.type === 'timeout' ? 0 : Math.max(0, Math.min(S.voteState.candidates.length - 1, Number(action.policyIdx) || 0));
+      const fajarUnit = calcMoney(S, 5000);
+      const maxFajar = Math.min(2, Math.floor(voter.cash / fajarUnit));
+      const fajar = action.type === 'timeout' ? 0 : Math.max(0, Math.min(maxFajar, Number(action.fajar) || 0));
+
+      if (fajar > 0) {
+        adjustCash(S, voter.id, -(fajar * fajarUnit), 'Serangan Fajar');
+      }
+      S.voteState.votes[actorId] = { policyIdx: idx, weight: 1 + fajar };
+
+      const aliveVoters = S.players.filter(p => !p.bankrupt);
+      if (aliveVoters.every(p => Boolean(S.voteState.votes[p.id]))) {
+        const tally = [0, 0, 0];
+        Object.values(S.voteState.votes).forEach(v => {
+          tally[v.policyIdx] = (tally[v.policyIdx] || 0) + v.weight;
+        });
+        let winIdx = 0;
+        if (tally[1] > tally[winIdx]) winIdx = 1;
+        if (tally[2] > tally[winIdx]) winIdx = 2;
+
+        const chosen = S.voteState.candidates[winIdx];
+        S.policy = Object.assign({}, chosen, { roundsLeft: 10 });
+        S.voteState = null;
+        S.phase = 'roll';
+        emit(S, { k: 'election_result', policy: S.policy });
+
+        const curTurnPlayer = S.players[S.turnIdx];
+        if (!curTurnPlayer || curTurnPlayer.bankrupt) {
+          advanceTurn(S);
+        } else if (curTurnPlayer.skipTurn) {
+          curTurnPlayer.skipTurn = false;
+          advanceTurn(S);
+        }
+      }
+      return S;
+    }
+
+    const active = S.players[S.turnIdx];
+    if (!active || active.id !== actorId || active.bankrupt) return S;
+
+    if (action.type === 'manage' && S.phase === 'roll' && active.jail === 0) {
+      const idx = Number(action.tile);
+      const ts = S.tiles[idx];
+      if (!ts || ts.owner !== active.id) return S;
+
+      if (action.sub === 'mortgage' && ts.level === 0 && ts.mortgaged === 0) {
+        const val = calcMortgageValue(S, idx);
+        ts.mortgaged = 4;
+        adjustCash(S, active.id, val, 'Gadai Tanah');
+      } else if (action.sub === 'redeem' && ts.mortgaged > 0) {
+        const cost = calcRedeemCost(S, idx);
+        if (active.cash >= cost) {
+          ts.mortgaged = 0;
+          adjustCash(S, active.id, -cost, 'Tebus Gadai');
+        }
+      } else if (action.sub === 'sellBuilding' && ts.level > 0) {
+        const val = calcSellBuildingValue(S, idx);
+        ts.level -= 1;
+        emit(S, { k: 'sell', pid: active.id, tile: idx, sub: 'sellBuilding' });
+        adjustCash(S, active.id, val, 'Jual Bangunan');
+      } else if (action.sub === 'sellTile' && ts.level === 0 && ts.mortgaged === 0) {
+        const val = calcSellTileValue(S, idx);
+        ts.owner = null;
+        ts.level = 0;
+        ts.mortgaged = 0;
+        emit(S, { k: 'sell', pid: active.id, tile: idx, sub: 'sellTile' });
+        adjustCash(S, active.id, val, 'Jual Tanah');
+      }
+      return S;
+    }
+
+    if (S.phase === 'roll' && active.jail > 0) {
+      const choice = action.type === 'timeout' ? 'roll' : action.choice;
+      if (choice === 'card' && active.jailCards > 0) {
+        active.jailCards -= 1;
+        active.jail = 0;
+      } else if (choice === 'pay') {
+        const bail = calcMoney(S, S.theme.economy.bailBase);
+        if (active.cash >= bail) {
+          active.jail = 0;
+          adjustCash(S, active.id, -bail, 'Jaminan Rutan');
+        }
+      } else if (choice === 'bribe') {
+        const bribe = calcMoney(S, S.theme.economy.jailBribeBase);
+        if (active.cash >= bribe) {
+          adjustCash(S, active.id, -bribe, 'Suap Sipir');
+          if (!active.bankrupt) {
+            if (Math.random() < 0.3) {
+              active.jail += 1;
+              advanceTurn(S);
+            } else {
+              active.jail = 0;
+            }
+          }
+        }
+      } else {
+        const d1 = 1 + Math.floor(Math.random() * 6);
+        const d2 = 1 + Math.floor(Math.random() * 6);
+        emit(S, { k: 'dice', pid: active.id, dice: [d1, d2] });
+        if (d1 === d2) {
+          active.jail = 0;
+          movePlayerSteps(S, active, d1 + d2);
+        } else {
+          active.jail -= 1;
+          advanceTurn(S);
+        }
+      }
+      return S;
+    }
+
+    if (S.phase === 'roll' && (action.type === 'roll' || action.type === 'timeout')) {
+      const count = (S.decree && S.decree.id === 'd_triple') ? 3 : 2;
+      const dice = [];
+      for (let i = 0; i < count; i++) {
+        dice.push(1 + Math.floor(Math.random() * 6));
+      }
+      emit(S, { k: 'dice', pid: active.id, dice });
+
+      const isDouble = dice.length >= 2 && dice[0] === dice[1];
+      if (isDouble) {
+        S.doublesCount += 1;
+        if (S.doublesCount >= 3) {
+          sendToJail(S, active);
+          return S;
+        }
+      } else {
+        S.doublesCount = 0;
+      }
+
+      const steps = dice.reduce((a, b) => a + b, 0);
+      movePlayerSteps(S, active, steps);
+      return S;
+    }
+
+    if (S.phase === 'decide' && S.pending) {
+      const pend = S.pending;
+      const choice = action.type === 'timeout' ? 'skip' : action.choice;
+      const ts = pend.tile !== undefined ? S.tiles[pend.tile] : null;
+
+      if (pend.kind === 'buy') {
+        if (choice === 'buy' && active.cash >= pend.price) {
+          ts.owner = active.id;
+          emit(S, { k: 'buy', pid: active.id, tile: pend.tile });
+          adjustCash(S, active.id, -pend.price, `Beli ${S.theme.board[pend.tile].name}`);
+        }
+        if (!active.bankrupt) endOrRepeatTurn(S, active);
+      } else if (pend.kind === 'build') {
+        if (choice === 'official' && active.cash >= pend.officialCost) {
+          adjustCash(S, active.id, -pend.officialCost, 'Izin Bangunan');
+          if (!active.bankrupt && Math.random() >= 0.3) {
+            ts.level = pend.nextLevel;
+            emit(S, { k: 'build', pid: active.id, tile: pend.tile, level: ts.level });
+          }
+        } else if (choice === 'bribe' && active.cash >= pend.bribeCost) {
+          adjustCash(S, active.id, -pend.bribeCost, 'Pelicin Izin');
+          if (!active.bankrupt) {
+            ts.level = pend.nextLevel;
+            emit(S, { k: 'build', pid: active.id, tile: pend.tile, level: ts.level });
+          }
+        }
+        if (!active.bankrupt) endOrRepeatTurn(S, active);
+      } else if (pend.kind === 'takeover') {
+        if (choice === 'takeover' && active.cash >= pend.cost) {
+          const prevOwner = ts.owner;
+          ts.owner = active.id;
+          emit(S, { k: 'buy', pid: active.id, tile: pend.tile });
+          adjustCash(S, active.id, -pend.cost, 'Takeover Aset');
+          if (prevOwner) adjustCash(S, prevOwner, pend.cost, 'Hasil Takeover');
+        }
+        if (!active.bankrupt) endOrRepeatTurn(S, active);
+      } else if (pend.kind === 'ciduk') {
+        if (choice === 'bribe' && active.cash >= pend.bribeCost) {
+          adjustCash(S, active.id, -pend.bribeCost, 'Sogok Penyidik');
+          if (!active.bankrupt) {
+            if (Math.random() < 0.5) {
+              endOrRepeatTurn(S, active);
+            } else {
+              sendToJail(S, active);
+            }
+          }
+        } else {
+          sendToJail(S, active);
+        }
+      } else if (pend.kind === 'kelurahan') {
+        if (choice === 'bribe' && active.cash >= pend.bribeCost) {
+          adjustCash(S, active.id, -pend.bribeCost, 'Pelicin Kelurahan');
+        } else {
+          active.skipTurn = true;
+        }
+        if (!active.bankrupt) endOrRepeatTurn(S, active);
+      } else if (pend.kind === 'pejabat') {
+        if (choice === 'tribute' && active.cash >= pend.cost) {
+          adjustCash(S, active.id, -pend.cost, 'Upeti Proyek');
+          if (!active.bankrupt) {
+            const roll = Math.random();
+            if (roll < 0.55) {
+              adjustCash(S, active.id, calcMoney(S, 20000), 'Menang Tender');
+              if (!active.bankrupt) endOrRepeatTurn(S, active);
+            } else if (roll < 0.8) {
+              endOrRepeatTurn(S, active);
+            } else {
+              sendToJail(S, active);
+            }
+          }
+        } else {
+          endOrRepeatTurn(S, active);
+        }
+      } else if (pend.kind === 'tilang') {
+        if (choice === 'bribe' && active.cash >= pend.bribeCost) {
+          adjustCash(S, active.id, -pend.bribeCost, 'Damai di Tempat');
+          if (!active.bankrupt) {
+            if (Math.random() < 0.25) {
+              sendToJail(S, active);
+            } else {
+              endOrRepeatTurn(S, active);
+            }
+          }
+        } else {
+          S.hibah = roundMoney(S.hibah + pend.fineCost);
+          adjustCash(S, active.id, -pend.fineCost, 'Denda Tilang');
+          if (!active.bankrupt) endOrRepeatTurn(S, active);
+        }
+      }
+      return S;
+    }
+
+    return S;
+  }
+
+  function apply(rawState, actorId, action) {
+    const next = applyAction(rawState, actorId, action);
+    return { state: next, events: next.ev || [] };
+  }
+
+  function chooseBotAction(S, botId) {
+    if (!S || S.phase === 'gameover') return null;
+    const bot = S.players.find(p => p.id === botId);
+    if (!bot || bot.bankrupt) return null;
+
+    if (S.phase === 'vote' && S.voteState) {
+      return { type: 'vote', policyIdx: Math.floor(Math.random() * 3), fajar: 0 };
+    }
+
+    if (S.phase === 'roll') {
+      if (bot.jail > 0) {
+        if (bot.jailCards > 0) return { type: 'jail', choice: 'card' };
+        const bail = calcMoney(S, S.theme.economy.bailBase);
+        if (bot.cash > bail * 2.5) return { type: 'jail', choice: 'pay' };
+        return { type: 'jail', choice: 'roll' };
+      }
+
+      if (bot.cash < calcMoney(S, 4000)) {
+        const myTileIdx = S.tiles.findIndex(t => t.owner === bot.id && t.mortgaged === 0);
+        if (myTileIdx !== -1) {
+          const ts = S.tiles[myTileIdx];
+          if (ts.level > 0) return { type: 'manage', sub: 'sellBuilding', tile: myTileIdx };
+          return { type: 'manage', sub: 'mortgage', tile: myTileIdx };
+        }
+      }
+
+      return { type: 'roll' };
+    }
+
+    if (S.phase === 'decide' && S.pending) {
+      const pend = S.pending;
+      if (pend.kind === 'buy') {
+        return { type: 'decide', choice: bot.cash >= pend.price * 1.45 ? 'buy' : 'skip' };
+      }
+      if (pend.kind === 'build') {
+        if (bot.cash >= pend.bribeCost * 1.8) return { type: 'decide', choice: 'bribe' };
+        if (bot.cash >= pend.officialCost * 1.5) return { type: 'decide', choice: 'official' };
+        return { type: 'decide', choice: 'skip' };
+      }
+      if (pend.kind === 'takeover') {
+        return { type: 'decide', choice: bot.cash >= pend.cost * 2.2 ? 'takeover' : 'skip' };
+      }
+      if (pend.kind === 'ciduk') {
+        return { type: 'decide', choice: bot.cash >= pend.bribeCost * 2 ? 'bribe' : 'surrender' };
+      }
+      if (pend.kind === 'kelurahan') {
+        return { type: 'decide', choice: bot.cash >= pend.bribeCost * 2 ? 'bribe' : 'queue' };
+      }
+      if (pend.kind === 'pejabat') {
+        return { type: 'decide', choice: bot.cash >= pend.cost * 3 ? 'tribute' : 'leave' };
+      }
+      if (pend.kind === 'tilang') {
+        return { type: 'decide', choice: bot.cash >= pend.fineCost ? 'fine' : 'bribe' };
+      }
+      return { type: 'decide', choice: 'skip' };
+    }
+
+    return null;
+  }
+
+  return {
+    LVL_NAMES,
+    GROUPS,
+    BOARD,
+    formatMoney,
+    calcMoney,
+    calcTilePrice,
+    calcBuildCost,
+    calcAssetValue,
+    calcSellTileValue,
+    calcSellBuildingValue,
+    calcMortgageValue,
+    calcRedeemCost,
+    calcTakeoverCost,
+    calcRent,
+    createInitialState,
+    applyAction,
+    apply,
+    chooseBotAction
+  };
+}));
