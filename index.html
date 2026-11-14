@@ -1,26 +1,922 @@
 <!DOCTYPE html>
 <html lang="id">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Konohapoly - Monopoli Satire Bertahan Hidup</title>
-  
-  <!-- Import Map untuk Three.js (Persiapan Tahap 3) -->
-  <script type="importmap">
-    {
-      "imports": {
-        "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
-        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>KONOHAPOLY — Monopoli Satire Negeri Konoha</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <style id="kp-core-styles">
+    :root {
+      --kp-bg: #070d19;
+      --kp-surface: #0f172a;
+      --kp-surface-2: #1e293b;
+      --kp-border: rgba(148, 163, 184, 0.22);
+      --kp-text: #f8fafc;
+      --kp-muted: #94a3b8;
+      --kp-accent: #facc15;
+      --kp-accent-text: #0f172a;
+      --kp-green: #34d399;
+      --kp-danger: #ef4444;
+      --kp-warn: #f59e0b;
+    }
+
+    *, *::before, *::after {
+      box-sizing: border-box;
+    }
+
+    html, body, #app {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      background: var(--kp-bg);
+      color: var(--kp-text);
+      font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    h1, h2, h3, h4, p {
+      margin: 0;
+    }
+
+    /* ==================== LAYOUT LAYAR UMUM ==================== */
+    .kp-screen {
+      min-height: 100%;
+      width: 100%;
+      padding: 20px 16px;
+      overflow-y: auto;
+    }
+
+    .kp-center {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .kp-center-text {
+      text-align: center;
+    }
+
+    .kp-stack {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .kp-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .kp-row-between {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    .kp-wrap {
+      flex-wrap: wrap;
+    }
+
+    .kp-mt {
+      margin-top: 16px;
+    }
+
+    .kp-mt-sm {
+      margin-top: 8px;
+    }
+
+    .kp-full {
+      width: 100%;
+    }
+
+    .kp-hidden {
+      display: none !important;
+    }
+
+    /* ==================== TIPOGRAFI & BADGE ==================== */
+    .kp-title {
+      font-size: 2rem;
+      font-weight: 900;
+      letter-spacing: 0.04em;
+      margin: 8px 0 6px;
+      background: linear-gradient(135deg, #fef08a 0%, var(--kp-accent) 55%, #f59e0b 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .kp-logo-sm {
+      font-size: 1.25rem;
+      font-weight: 900;
+      letter-spacing: 0.04em;
+      color: var(--kp-accent);
+    }
+
+    .kp-sub {
+      color: var(--kp-muted);
+      font-size: 0.9rem;
+      line-height: 1.5;
+      margin-bottom: 18px;
+    }
+
+    .kp-muted {
+      color: var(--kp-muted);
+    }
+
+    .kp-sm {
+      font-size: 0.86rem;
+      line-height: 1.45;
+    }
+
+    .kp-xs {
+      font-size: 0.76rem;
+      line-height: 1.35;
+    }
+
+    .kp-green {
+      color: var(--kp-green);
+    }
+
+    .kp-badge {
+      display: inline-block;
+      padding: 4px 10px;
+      border-radius: 999px;
+      font-size: 0.7rem;
+      font-weight: 800;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      background: rgba(250, 204, 21, 0.14);
+      color: var(--kp-accent);
+      border: 1px solid rgba(250, 204, 21, 0.35);
+    }
+
+    .kp-badge-blue {
+      background: rgba(56, 189, 248, 0.15);
+      color: #38bdf8;
+      border-color: rgba(56, 189, 248, 0.4);
+    }
+
+    .kp-badge-red {
+      background: rgba(239, 68, 68, 0.15);
+      color: #f87171;
+      border-color: rgba(239, 68, 68, 0.4);
+    }
+
+    .kp-badge-yellow {
+      background: rgba(250, 204, 21, 0.18);
+      color: #fde047;
+      border-color: rgba(250, 204, 21, 0.45);
+    }
+
+    /* ==================== KARTU, INPUT & TOMBOL ==================== */
+    .kp-card {
+      background: var(--kp-surface);
+      border: 1px solid var(--kp-border);
+      border-radius: 16px;
+      padding: 20px;
+      box-shadow: 0 14px 34px rgba(0, 0, 0, 0.45);
+    }
+
+    .kp-login-box {
+      width: 100%;
+      max-width: 420px;
+    }
+
+    .kp-wait-box {
+      width: 100%;
+      max-width: 680px;
+    }
+
+    .kp-label {
+      font-size: 0.82rem;
+      font-weight: 700;
+      color: #cbd5e1;
+    }
+
+    .kp-input {
+      width: 100%;
+      padding: 11px 14px;
+      border-radius: 10px;
+      border: 1px solid var(--kp-border);
+      background: var(--kp-surface-2);
+      color: var(--kp-text);
+      font-size: 0.95rem;
+      outline: none;
+      transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    }
+
+    .kp-input:focus {
+      border-color: var(--kp-accent);
+      box-shadow: 0 0 0 3px rgba(250, 204, 21, 0.18);
+    }
+
+    .kp-input-sm {
+      padding: 7px 10px;
+      font-size: 0.84rem;
+      border-radius: 8px;
+    }
+
+    .kp-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      padding: 10px 16px;
+      border-radius: 10px;
+      border: 1px solid transparent;
+      font-size: 0.9rem;
+      font-weight: 700;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: transform 0.1s ease, filter 0.15s ease, background 0.15s ease;
+    }
+
+    .kp-btn:hover:not(:disabled) {
+      filter: brightness(1.08);
+    }
+
+    .kp-btn:active:not(:disabled) {
+      transform: scale(0.98);
+    }
+
+    .kp-btn:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+    }
+
+    .kp-btn-sm {
+      padding: 7px 12px;
+      font-size: 0.82rem;
+      border-radius: 8px;
+    }
+
+    .kp-btn-xs {
+      padding: 5px 9px;
+      font-size: 0.76rem;
+      border-radius: 7px;
+    }
+
+    .kp-btn-primary {
+      background: var(--kp-accent);
+      color: var(--kp-accent-text);
+    }
+
+    .kp-btn-ghost {
+      background: var(--kp-surface-2);
+      color: var(--kp-text);
+      border-color: var(--kp-border);
+    }
+
+    .kp-btn-danger {
+      background: var(--kp-danger);
+      color: #ffffff;
+    }
+
+    .kp-btn-warn {
+      background: var(--kp-warn);
+      color: #0f172a;
+    }
+
+    /* ==================== LOBBY & WAITING ROOM ==================== */
+    .kp-lobby {
+      max-width: 960px;
+      margin: 0 auto;
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+    }
+
+    .kp-lobby-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+      background: var(--kp-surface);
+      border: 1px solid var(--kp-border);
+      padding: 14px 18px;
+      border-radius: 14px;
+    }
+
+    .kp-lobby-grid {
+      display: grid;
+      grid-template-columns: 340px 1fr;
+      gap: 16px;
+      align-items: start;
+    }
+
+    .kp-room-list {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      margin-top: 12px;
+      max-height: 360px;
+      overflow-y: auto;
+    }
+
+    .kp-room-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 12px 14px;
+      background: var(--kp-surface-2);
+      border: 1px solid var(--kp-border);
+      border-radius: 12px;
+    }
+
+    .kp-room-title {
+      font-weight: 800;
+      font-size: 0.95rem;
+      margin-bottom: 3px;
+    }
+
+    .kp-empty {
+      padding: 28px 16px;
+      text-align: center;
+      color: var(--kp-muted);
+      font-size: 0.88rem;
+      border: 1px dashed var(--kp-border);
+      border-radius: 12px;
+    }
+
+    .kp-tag {
+      display: inline-block;
+      padding: 2px 7px;
+      border-radius: 6px;
+      font-weight: 700;
+    }
+
+    .kp-tag-wait {
+      background: rgba(52, 211, 153, 0.15);
+      color: #34d399;
+    }
+
+    .kp-tag-play {
+      background: rgba(56, 189, 248, 0.15);
+      color: #38bdf8;
+    }
+
+    .kp-warn-banner {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-top: 14px;
+      padding: 10px 14px;
+      border-radius: 10px;
+      background: rgba(245, 158, 11, 0.16);
+      border: 1px solid rgba(245, 158, 11, 0.45);
+      color: #fde68a;
+      font-size: 0.84rem;
+    }
+
+    .kp-seats-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 12px;
+      margin-top: 16px;
+    }
+
+    .kp-seat {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      min-height: 74px;
+      padding: 12px 14px;
+      background: var(--kp-surface-2);
+      border: 1px solid var(--kp-border);
+      border-radius: 12px;
+    }
+
+    .kp-seat-empty {
+      flex-direction: column;
+      align-items: flex-start;
+      justify-content: center;
+      border-style: dashed;
+    }
+
+    .kp-seat-locked {
+      opacity: 0.65;
+      background: rgba(15, 23, 42, 0.65);
+    }
+
+    /* ==================== LAYAR PERMAINAN 3D (HUD) ==================== */
+    .kp-game-shell {
+      position: fixed;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      background: var(--kp-bg);
+    }
+
+    .kp-hud-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 8px 12px;
+      background: rgba(15, 23, 42, 0.94);
+      border-bottom: 1px solid var(--kp-border);
+      z-index: 20;
+      flex-wrap: wrap;
+    }
+
+    .kp-chips {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      flex: 1;
+      min-width: 0;
+    }
+
+    .kp-chip {
+      background: var(--kp-surface-2);
+      border: 1px solid var(--kp-border);
+      border-radius: 10px;
+      padding: 5px 10px;
+      min-width: 112px;
+      transition: transform 0.15s ease, box-shadow 0.15s ease;
+    }
+
+    .kp-chip-turn {
+      box-shadow: 0 0 0 2px var(--kp-accent);
+      background: rgba(250, 204, 21, 0.14);
+    }
+
+    .kp-chip-dead {
+      opacity: 0.42;
+      filter: grayscale(1);
+    }
+
+    .kp-chip-name {
+      font-size: 0.78rem;
+      font-weight: 700;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .kp-chip-cash {
+      font-size: 0.82rem;
+      font-weight: 800;
+      color: var(--kp-green);
+      margin-top: 1px;
+    }
+
+    .kp-meta-pills {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+
+    .kp-stat {
+      font-size: 0.78rem;
+      background: var(--kp-surface-2);
+      border: 1px solid var(--kp-border);
+      padding: 5px 9px;
+      border-radius: 8px;
+      white-space: nowrap;
+    }
+
+    .kp-unread-dot {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 16px;
+      height: 16px;
+      padding: 0 4px;
+      border-radius: 999px;
+      background: var(--kp-danger);
+      color: #fff;
+      font-size: 0.68rem;
+      font-weight: 800;
+    }
+
+    .kp-ticker {
+      background: #0b1222;
+      color: #fde047;
+      font-size: 0.78rem;
+      font-weight: 600;
+      padding: 5px 14px;
+      border-bottom: 1px solid rgba(250, 204, 21, 0.2);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      z-index: 19;
+    }
+
+    .kp-pill-bar {
+      position: absolute;
+      top: 94px;
+      left: 12px;
+      right: 170px;
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+      pointer-events: none;
+      z-index: 16;
+    }
+
+    .kp-pill {
+      padding: 4px 10px;
+      border-radius: 999px;
+      font-size: 0.74rem;
+      font-weight: 700;
+      backdrop-filter: blur(6px);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+    }
+
+    .kp-pill-red {
+      background: rgba(185, 28, 28, 0.88);
+      color: #fecaca;
+      border: 1px solid #f87171;
+    }
+
+    .kp-pill-yellow {
+      background: rgba(161, 98, 7, 0.88);
+      color: #fef08a;
+      border: 1px solid #facc15;
+    }
+
+    .kp-pill-blue {
+      background: rgba(3, 105, 161, 0.88);
+      color: #bae6fd;
+      border: 1px solid #38bdf8;
+    }
+
+    .kp-pill-orange {
+      background: rgba(194, 65, 12, 0.88);
+      color: #fed7aa;
+      border: 1px solid #fb923c;
+    }
+
+    .kp-board-wrap {
+      position: relative;
+      flex: 1;
+      min-height: 0;
+      width: 100%;
+      overflow: hidden;
+    }
+
+    .kp-cam-toggle {
+      position: absolute;
+      top: 12px;
+      right: 12px;
+      pointer-events: auto;
+      z-index: 15;
+      background: rgba(15, 23, 42, 0.86);
+      color: #f8fafc;
+      border: 1px solid rgba(250, 204, 21, 0.45);
+      border-radius: 999px;
+      padding: 7px 13px;
+      font-size: 0.78rem;
+      font-weight: 700;
+      cursor: pointer;
+      backdrop-filter: blur(6px);
+    }
+
+    .kp-cam-toggle:hover {
+      background: rgba(30, 41, 59, 0.95);
+    }
+
+    .kp-float-cash {
+      position: absolute;
+      top: 0;
+      left: 0;
+      pointer-events: none;
+      font-weight: 900;
+      font-size: 0.95rem;
+      text-shadow: 0 2px 6px rgba(0, 0, 0, 0.95);
+      white-space: nowrap;
+      z-index: 16;
+    }
+
+    /* ==================== NOTIFIKASI / TOAST ==================== */
+    .kp-notif-area {
+      position: absolute;
+      bottom: 76px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: min(92vw, 540px);
+      z-index: 30;
+      pointer-events: none;
+    }
+
+    .kp-toast {
+      pointer-events: auto;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      background: rgba(15, 23, 42, 0.95);
+      border: 1px solid rgba(250, 204, 21, 0.5);
+      color: #f8fafc;
+      padding: 10px 14px;
+      border-radius: 12px;
+      font-size: 0.84rem;
+      line-height: 1.4;
+      box-shadow: 0 12px 28px rgba(0, 0, 0, 0.55);
+    }
+
+    .kp-toast-x {
+      background: transparent;
+      border: none;
+      color: var(--kp-muted);
+      font-size: 0.95rem;
+      cursor: pointer;
+      padding: 2px 6px;
+    }
+
+    /* ==================== BOTTOM DOCK & LEMPAR DADU ==================== */
+    .kp-hud-bottom {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 10px 14px;
+      background: rgba(15, 23, 42, 0.96);
+      border-top: 1px solid var(--kp-border);
+      z-index: 20;
+      flex-wrap: wrap;
+    }
+
+    .kp-my-wallet {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .kp-wallet-val {
+      font-size: 1.05rem;
+      font-weight: 900;
+      color: var(--kp-green);
+    }
+
+    .kp-turn-status {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-weight: 700;
+      font-size: 0.9rem;
+    }
+
+    .kp-timer-badge {
+      background: rgba(239, 68, 68, 0.18);
+      color: #fca5a5;
+      border: 1px solid rgba(239, 68, 68, 0.4);
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-size: 0.76rem;
+      font-weight: 800;
+    }
+
+    .kp-dock-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .kp-roll-wrap {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .kp-power-bar {
+      height: 6px;
+      width: 100%;
+      background: var(--kp-surface-2);
+      border-radius: 999px;
+      overflow: hidden;
+      border: 1px solid var(--kp-border);
+    }
+
+    .kp-power-fill {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, #22c55e, #facc15, #ef4444);
+      transition: width 35ms linear;
+    }
+
+    /* ==================== PANEL OBROLAN ==================== */
+    .kp-chat-panel {
+      position: absolute;
+      top: 96px;
+      right: 12px;
+      bottom: 74px;
+      width: min(320px, 90vw);
+      background: rgba(15, 23, 42, 0.96);
+      border: 1px solid var(--kp-border);
+      border-radius: 14px;
+      display: flex;
+      flex-direction: column;
+      z-index: 35;
+      box-shadow: 0 14px 36px rgba(0, 0, 0, 0.65);
+      backdrop-filter: blur(8px);
+      overflow: hidden;
+    }
+
+    .kp-chat-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--kp-border);
+      font-size: 0.88rem;
+    }
+
+    .kp-chat-messages {
+      flex: 1;
+      overflow-y: auto;
+      padding: 10px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      font-size: 0.82rem;
+    }
+
+    .kp-chat-msg {
+      background: rgba(30, 41, 59, 0.65);
+      padding: 6px 9px;
+      border-radius: 8px;
+      line-height: 1.35;
+      word-break: break-word;
+    }
+
+    .kp-chat-quick {
+      display: flex;
+      gap: 5px;
+      padding: 6px 10px;
+      overflow-x: auto;
+      border-top: 1px solid var(--kp-border);
+    }
+
+    .kp-quick-chip {
+      background: var(--kp-surface-2);
+      color: var(--kp-text);
+      border: 1px solid var(--kp-border);
+      border-radius: 999px;
+      padding: 4px 9px;
+      font-size: 0.72rem;
+      white-space: nowrap;
+      cursor: pointer;
+    }
+
+    .kp-chat-form {
+      display: flex;
+      gap: 6px;
+      padding: 8px 10px;
+      border-top: 1px solid var(--kp-border);
+    }
+
+    /* ==================== MODAL & OVERLAY ==================== */
+    .kp-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(2, 6, 23, 0.76);
+      backdrop-filter: blur(4px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+      z-index: 50;
+    }
+
+    .kp-modal {
+      background: var(--kp-surface);
+      border: 1px solid var(--kp-border);
+      border-radius: 16px;
+      padding: 20px;
+      width: min(490px, 94vw);
+      max-height: 86vh;
+      overflow-y: auto;
+      box-shadow: 0 22px 54px rgba(0, 0, 0, 0.72);
+    }
+
+    .kp-rules-modal {
+      width: min(560px, 94vw);
+    }
+
+    .kp-rules-list {
+      padding-left: 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      font-size: 0.88rem;
+      line-height: 1.5;
+      color: #e2e8f0;
+    }
+
+    .kp-radio-card {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      padding: 12px;
+      border-radius: 12px;
+      background: var(--kp-surface-2);
+      border: 1px solid var(--kp-border);
+      cursor: pointer;
+      transition: border-color 0.15s ease, background 0.15s ease;
+    }
+
+    .kp-radio-card.kp-selected {
+      border-color: var(--kp-accent);
+      background: rgba(250, 204, 21, 0.12);
+    }
+
+    .kp-fajar-box {
+      padding: 12px;
+      border-radius: 12px;
+      background: var(--kp-surface-2);
+      border: 1px solid var(--kp-border);
+      font-size: 0.84rem;
+    }
+
+    .kp-asset-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      flex-wrap: wrap;
+      background: var(--kp-surface-2);
+      border: 1px solid var(--kp-border);
+      padding: 10px 12px;
+      border-radius: 10px;
+    }
+
+    .kp-kv-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      background: var(--kp-surface-2);
+      padding: 12px;
+      border-radius: 12px;
+      border: 1px solid var(--kp-border);
+      font-size: 0.86rem;
+    }
+
+    .kp-kv-list > div {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    /* ==================== RESPONSIF MOBILE ==================== */
+    @media (max-width: 720px) {
+      .kp-lobby-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .kp-seats-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .kp-chip {
+        min-width: 92px;
+        padding: 4px 8px;
+      }
+
+      .kp-hud-bottom {
+        padding: 8px 10px;
+        gap: 8px;
+      }
+
+      .kp-turn-status {
+        font-size: 0.82rem;
       }
     }
-  </script>
-
-  <link rel="stylesheet" href="src/styles.css">
+  </style>
 </head>
 <body>
   <div id="app"></div>
 
-  <!-- Entrypoint Aplikasi -->
-  <script type="module" src="src/main.js"></script>
+  <script src="src/sound.js"></script>
+  <script src="src/themes.js"></script>
+  <script src="src/engine.js"></script>
+  <script src="src/rooms.js"></script>
+  <script src="src/net.js"></script>
+  <script src="src/scene.js"></script>
+  <script src="src/ui.js"></script>
+  <script>
+    window.addEventListener('error', function (e) {
+      console.error('Konohapoly Error:', e.error || e.message);
+    });
+    window.addEventListener('DOMContentLoaded', function () {
+      var appEl = document.getElementById('app');
+      if (window.KonohapolyUI && appEl) {
+        window.KonohapolyUI.init(appEl);
+      } else if (appEl) {
+        appEl.innerHTML = '<div style="padding:24px;color:#f87171;font-family:sans-serif;">Gagal memuat modul Konohapoly. Pastikan folder <b>src/</b> sejajar dengan <b>index.html</b>.</div>';
+      }
+    });
+  </script>
 </body>
 </html>
