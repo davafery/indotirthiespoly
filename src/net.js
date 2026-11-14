@@ -56,6 +56,11 @@
     }
   }
 
+  function hasActiveHumans(room) {
+    if (!room || !Array.isArray(room.seats)) return false;
+    return room.seats.some(s => s.player && !s.player.isBot && !s.player.afk);
+  }
+
   function loadAllRooms() {
     let map = safeReadJSON(LS_ROOMS, null);
     if (!map || typeof map !== 'object' || Array.isArray(map)) {
@@ -70,6 +75,12 @@
         delete map[id];
         changed = true;
       } else if (r.status === 'waiting' && now - (r.hostLastActiveAt || 0) > 65000) {
+        delete map[id];
+        changed = true;
+      } else if (r.status === 'playing' && !hasActiveHumans(r)) {
+        delete map[id];
+        changed = true;
+      } else if (r.game && r.game.phase === 'gameover' && now - (r.finishedAt || r.hostLastActiveAt || 0) > 15000) {
         delete map[id];
         changed = true;
       }
@@ -96,9 +107,14 @@
 
     if (activeRoomId) {
       const existingRoom = getActiveRoom();
-      if (existingRoom) {
+      if (existingRoom && !(existingRoom.game && existingRoom.game.phase === 'gameover')) {
         scheduleBotIfNeeded(existingRoom);
       } else {
+        if (existingRoom && existingRoom.game && existingRoom.game.phase === 'gameover') {
+          const map = loadAllRooms();
+          delete map[activeRoomId];
+          saveAllRooms(map);
+        }
         activeRoomId = null;
         safeSessionSet(SS_ACTIVE_ROOM, null);
       }
@@ -139,7 +155,9 @@
 
   function listRooms() {
     const map = loadAllRooms();
-    return Object.values(map).map(r => Rooms.summarizeRoom(r));
+    return Object.values(map)
+      .filter(r => !(r.game && r.game.phase === 'gameover'))
+      .map(r => Rooms.summarizeRoom(r));
   }
 
   function createRoom(roomName) {
@@ -160,8 +178,8 @@
     const user = getUser() || login('Warga +62');
     const map = loadAllRooms();
     const room = map[roomId];
-    if (!room) {
-      return { ok: false, error: 'Room tidak ditemukan atau sudah bubar.' };
+    if (!room || (room.game && room.game.phase === 'gameover')) {
+      return { ok: false, error: 'Room tidak ditemukan atau permainan sudah selesai.' };
     }
 
     const res = Rooms.joinRoom(room, user);
@@ -201,8 +219,14 @@
       const map = loadAllRooms();
       const room = map[activeRoomId];
       if (room) {
-        const res = Rooms.leaveRoom(room, user);
-        if (res.deleted) {
+        const isGameOver = Boolean(room.game && room.game.phase === 'gameover');
+        const res = Rooms.leaveRoom(room, user) || {};
+
+        if (
+          res.deleted ||
+          (isGameOver && room.hostUid === user.uid) ||
+          !hasActiveHumans(room)
+        ) {
           delete map[activeRoomId];
         } else {
           map[activeRoomId] = room;
@@ -224,6 +248,9 @@
     if (!room) return;
 
     Rooms.applyOp(room, user, opName, payload || {});
+    if (room.game && room.game.phase === 'gameover' && !room.finishedAt) {
+      room.finishedAt = Date.now();
+    }
     map[roomId] = room;
     saveAllRooms(map);
 
@@ -247,11 +274,13 @@
 
     const G = room.game;
 
-    // Pemulihan otomatis jika state lama sempat berhenti di pemain yang bangkrut
     const activeTurnPlayer = G.players[G.turnIdx];
     if (G.phase !== 'vote' && activeTurnPlayer && activeTurnPlayer.bankrupt) {
       room.game = Engine.applyAction(G, activeTurnPlayer.id, { type: 'timeout' });
       room.ver = (room.ver || 0) + 1;
+      if (room.game && room.game.phase === 'gameover' && !room.finishedAt) {
+        room.finishedAt = Date.now();
+      }
       const map = loadAllRooms();
       map[room.id] = room;
       saveAllRooms(map);
