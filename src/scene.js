@@ -65,16 +65,21 @@
   let camYaw = 0;
   let camPitch = 0.88;
   let camDist = 20.5;
+  let targetCamDist = 20.5;
   let camTarget = { x: 0, y: 0.4, z: 0.8 };
   let isDragging = false;
   let dragStart = { x: 0, y: 0 };
   let dragMoved = 0;
+  let pinchStartDist = 0;
+  let pinchStartCamDist = 20.5;
   let rafId = null;
 
   let winResizeHandler = null;
   let winMoveHandler = null;
   let winUpHandler = null;
 
+  const MIN_CAM_DIST = 8.5;
+  const MAX_CAM_DIST = 46;
   const CORNER_W = 2.15;
   const EDGE_W = 1.42;
   const BOARD_SPAN = CORNER_W * 2 + EDGE_W * 9;
@@ -92,6 +97,21 @@
 
   function getRentSafe(S, idx) {
     return (Engine && Engine.calcRent) ? Engine.calcRent(S, idx) : 0;
+  }
+
+  function getMobileZoomMultiplier() {
+    if (!containerEl) return 1;
+    const w = Math.max(300, containerEl.clientWidth);
+    const h = Math.max(260, containerEl.clientHeight);
+    const aspect = w / h;
+    if (aspect < 0.85) {
+      return Math.min(1.85, 0.95 / Math.max(0.45, aspect));
+    }
+    return 1;
+  }
+
+  function clampCamDist(val) {
+    return Math.max(MIN_CAM_DIST, Math.min(MAX_CAM_DIST, val));
   }
 
   function drawRoundRect(ctx, x, y, w, h, r) {
@@ -141,6 +161,7 @@
     lastPlaqueSig = '';
     hoveredTile = -1;
     isDragging = false;
+    pinchStartDist = 0;
   }
 
   function applyTheme(themeObj) {
@@ -216,6 +237,11 @@
 
     containerEl.innerHTML = '';
 
+    const mobMult = getMobileZoomMultiplier();
+    const initialDist = clampCamDist((cameraMode === 'overview' ? 21.5 : 17.5) * Math.min(1.55, mobMult));
+    camDist = initialDist;
+    targetCamDist = initialDist;
+
     THREE = typeof window !== 'undefined' ? window.THREE : null;
     if (!THREE) {
       initFallback2D(container);
@@ -229,19 +255,55 @@
     camBtn = document.createElement('button');
     camBtn.type = 'button';
     camBtn.className = 'kp-cam-toggle';
-    camBtn.textContent = '🎥 Kamera: Ikuti';
-    camBtn.addEventListener('click', () => {
+    camBtn.textContent = cameraMode === 'follow' ? '🎥 Kamera: Ikuti' : '🗺️ Kamera: Papan Penuh';
+    camBtn.addEventListener('pointerdown', e => e.stopPropagation());
+    camBtn.addEventListener('click', e => {
+      e.stopPropagation();
+      const mult = getMobileZoomMultiplier();
       cameraMode = cameraMode === 'follow' ? 'overview' : 'follow';
       camBtn.textContent = cameraMode === 'follow' ? '🎥 Kamera: Ikuti' : '🗺️ Kamera: Papan Penuh';
       if (cameraMode === 'overview') {
         camYaw = 0;
         camPitch = 0.92;
-        camDist = 21.5;
+        targetCamDist = clampCamDist(21.5 * mult);
       } else {
-        camDist = 16.5;
+        targetCamDist = clampCamDist(17.5 * Math.min(1.55, mult));
       }
     });
     overlayLayer.appendChild(camBtn);
+
+    const zoomBox = document.createElement('div');
+    zoomBox.style.cssText = 'position:absolute;right:12px;bottom:14px;display:flex;flex-direction:column;gap:8px;pointer-events:auto;z-index:12;';
+
+    const zoomBtnStyle = 'width:40px;height:40px;border-radius:12px;border:1px solid rgba(255,255,255,0.22);background:rgba(15,23,42,0.86);color:#f8fafc;font-size:20px;font-weight:900;line-height:1;display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 4px 12px rgba(0,0,0,0.35);backdrop-filter:blur(6px);touch-action:manipulation;user-select:none;';
+
+    const zoomInBtn = document.createElement('button');
+    zoomInBtn.type = 'button';
+    zoomInBtn.title = 'Perbesar Peta (Zoom In)';
+    zoomInBtn.setAttribute('aria-label', 'Perbesar Peta');
+    zoomInBtn.textContent = '+';
+    zoomInBtn.style.cssText = zoomBtnStyle;
+    zoomInBtn.addEventListener('pointerdown', e => e.stopPropagation());
+    zoomInBtn.addEventListener('click', e => {
+      e.stopPropagation();
+      targetCamDist = clampCamDist(targetCamDist - 3.6);
+    });
+
+    const zoomOutBtn = document.createElement('button');
+    zoomOutBtn.type = 'button';
+    zoomOutBtn.title = 'Perkecil Peta (Zoom Out)';
+    zoomOutBtn.setAttribute('aria-label', 'Perkecil Peta');
+    zoomOutBtn.textContent = '−';
+    zoomOutBtn.style.cssText = zoomBtnStyle;
+    zoomOutBtn.addEventListener('pointerdown', e => e.stopPropagation());
+    zoomOutBtn.addEventListener('click', e => {
+      e.stopPropagation();
+      targetCamDist = clampCamDist(targetCamDist + 3.6);
+    });
+
+    zoomBox.appendChild(zoomInBtn);
+    zoomBox.appendChild(zoomOutBtn);
+    overlayLayer.appendChild(zoomBox);
 
     renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.75));
@@ -252,9 +314,9 @@
 
     scene = new THREE.Scene();
     scene.background = new THREE.Color(themeScene.skyHex);
-    scene.fog = new THREE.FogExp2(themeScene.skyHex, 0.015);
+    scene.fog = new THREE.FogExp2(themeScene.skyHex, 0.012);
 
-    camera = new THREE.PerspectiveCamera(42, 1, 0.5, 140);
+    camera = new THREE.PerspectiveCamera(42, 1, 0.5, 160);
     raycaster = new THREE.Raycaster();
     pointerNDC = new THREE.Vector2();
 
@@ -290,7 +352,7 @@
   }
 
   function buildArchipelagoAndMonas() {
-    const seaGeo = new THREE.PlaneGeometry(130, 130, 32, 32);
+    const seaGeo = new THREE.PlaneGeometry(150, 150, 32, 32);
     seaGeo.rotateX(-Math.PI / 2);
     const seaMat = new THREE.MeshStandardMaterial({
       color: themeScene.seaHex,
@@ -820,7 +882,8 @@
       });
     });
 
-    diceFocusUntil = now + 900;
+    // 850ms animasi dadu + 700ms jeda agar angka dadu terbaca jelas sebelum kamera berpindah ke karakter
+    diceFocusUntil = now + 1550;
   }
 
   function ensurePawns3D(S) {
@@ -915,12 +978,15 @@
       const hasDice = S.ev.some(e => e.k === 'dice');
       const moveEv = S.ev.find(e => e.k === 'move');
       const steps = moveEv ? Math.abs(Number(moveEv.steps) || 0) : 0;
-      const cashDelay = hasDice ? (980 + Math.min(12, steps) * 115) : 300;
+      const cashDelay = hasDice ? (2300 + Math.min(12, steps) * 125) : 550;
 
       for (const ev of S.ev) {
         if (ev.k === 'dice') {
           spawnDiceThrow3D(ev.dice, ev.pid);
-          pawnMoveDelayUntil[ev.pid] = now + 900;
+          // 1550ms fokus dadu + 700ms kamera berpindah ke karakter = 2250ms sebelum karakter jalan
+          pawnMoveDelayUntil[ev.pid] = now + 2250;
+        } else if (ev.k === 'move' && !hasDice) {
+          pawnMoveDelayUntil[ev.pid] = Math.max(pawnMoveDelayUntil[ev.pid] || 0, now + 500);
         } else if (ev.k === 'cash' && ev.a !== 0) {
           spawnFloatingMoneyLabel(ev.pid, ev.a, ev.w, now, cashDelay);
         }
@@ -943,6 +1009,7 @@
 
   function bindCameraControls(domEl) {
     domEl.addEventListener('pointerdown', e => {
+      if (e.isPrimary === false) return;
       isDragging = true;
       dragMoved = 0;
       dragStart = { x: e.clientX, y: e.clientY };
@@ -954,7 +1021,7 @@
       pointerNDC.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
       pointerNDC.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
 
-      if (isDragging) {
+      if (isDragging && pinchStartDist === 0) {
         const dx = e.clientX - dragStart.x;
         const dy = e.clientY - dragStart.y;
         dragMoved += Math.hypot(dx, dy);
@@ -966,7 +1033,7 @@
     window.addEventListener('pointermove', winMoveHandler);
 
     winUpHandler = () => {
-      if (isDragging && dragMoved < 6 && hoveredTile !== -1 && onTileClickCb) {
+      if (isDragging && pinchStartDist === 0 && dragMoved < 6 && hoveredTile !== -1 && onTileClickCb) {
         onTileClickCb(hoveredTile);
       }
       isDragging = false;
@@ -975,8 +1042,35 @@
 
     domEl.addEventListener('wheel', e => {
       e.preventDefault();
-      camDist = Math.max(10.5, Math.min(30, camDist + e.deltaY * 0.012));
+      targetCamDist = clampCamDist(targetCamDist + e.deltaY * 0.015);
     }, { passive: false });
+
+    domEl.addEventListener('touchstart', e => {
+      if (e.touches.length === 2) {
+        isDragging = false;
+        const dx = e.touches[0].clientX - e.touches[1].clientX;
+        const dy = e.touches[0].clientY - e.touches[1].clientY;
+        pinchStartDist = Math.hypot(dx, dy);
+        pinchStartCamDist = targetCamDist;
+      }
+    }, { passive: true });
+
+    domEl.addEventListener('touchmove', e => {
+      if (e.touches.length === 2 && pinchStartDist > 0) {
+        e.preventDefault();
+        const dx = e.touches[0].clientX - e.touches[1].clientX;
+        const dy = e.touches[0].clientY - e.touches[1].clientY;
+        const dist = Math.hypot(dx, dy);
+        const ratio = pinchStartDist / Math.max(10, dist);
+        targetCamDist = clampCamDist(pinchStartCamDist * ratio);
+      }
+    }, { passive: false });
+
+    domEl.addEventListener('touchend', e => {
+      if (e.touches.length < 2) {
+        pinchStartDist = 0;
+      }
+    }, { passive: true });
   }
 
   function updateRaycastHover() {
@@ -999,6 +1093,8 @@
       if (seaMesh) {
         seaMesh.position.y = -0.35 + Math.sin(now * 0.0016) * 0.04;
       }
+
+      camDist += (targetCamDist - camDist) * 0.16;
 
       diceRigs.forEach(d => {
         const t = Math.min(1, (now - d.born) / d.dur);
@@ -1039,16 +1135,16 @@
           if (diff > 20) diff -= 40;
 
           const delayUntil = pawnMoveDelayUntil[p.id] || 0;
-          const waitingForDice = now < delayUntil;
+          const waitingForCamera = now < delayUntil;
 
           let hopY = 0;
-          if (waitingForDice || Math.abs(diff) < 0.03) {
-            if (!waitingForDice) {
+          if (waitingForCamera || Math.abs(diff) < 0.03) {
+            if (!waitingForCamera) {
               visualPos[p.id] = targetPos;
             }
             hopPhase[p.id] = 0;
           } else {
-            const step = Math.sign(diff) * Math.min(Math.abs(diff), 0.17);
+            const step = Math.sign(diff) * Math.min(Math.abs(diff), 0.145);
             visualPos[p.id] = (cur + step + 40) % 40;
             hopPhase[p.id] = (hopPhase[p.id] || 0) + 0.42;
             hopY = Math.abs(Math.sin(hopPhase[p.id])) * 0.58;
@@ -1072,12 +1168,13 @@
       }
 
       const wantTarget = (cameraMode === 'follow' && now > diceFocusUntil)
-        ? { x: activeWorldPos.x * 0.55, y: 0.4, z: activeWorldPos.z * 0.55 }
+        ? { x: activeWorldPos.x * 0.58, y: 0.4, z: activeWorldPos.z * 0.58 }
         : { x: 0, y: 0.4, z: 0.6 };
 
-      camTarget.x += (wantTarget.x - camTarget.x) * 0.07;
-      camTarget.y += (wantTarget.y - camTarget.y) * 0.07;
-      camTarget.z += (wantTarget.z - camTarget.z) * 0.07;
+      const camLerp = (cameraMode === 'follow' && now > diceFocusUntil) ? 0.11 : 0.08;
+      camTarget.x += (wantTarget.x - camTarget.x) * camLerp;
+      camTarget.y += (wantTarget.y - camTarget.y) * camLerp;
+      camTarget.z += (wantTarget.z - camTarget.z) * camLerp;
 
       const horizR = Math.cos(camPitch) * camDist;
       const camY = Math.sin(camPitch) * camDist;
