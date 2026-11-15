@@ -219,20 +219,45 @@
     G.ev.push(evObj);
   }
 
-  function createGame(playersList, customTheme) {
+  function normalizePlayersInput(input) {
+    let rawList = [];
+    if (Array.isArray(input)) {
+      rawList = input;
+    } else if (input && Array.isArray(input.seats)) {
+      rawList = input.seats;
+    } else if (input && Array.isArray(input.players)) {
+      rawList = input.players;
+    }
+
+    const extracted = [];
+    rawList.forEach(item => {
+      if (!item) return;
+      if (item.player && typeof item.player === 'object') {
+        extracted.push(item.player);
+      } else if (item.id || item.name || item.uid) {
+        extracted.push(item);
+      }
+    });
+    return extracted;
+  }
+
+  function createGame(playersOrSeatsInput, customTheme) {
+    const extractedPlayers = normalizePlayersInput(playersOrSeatsInput);
+    const resolvedTheme = customTheme || (playersOrSeatsInput && playersOrSeatsInput.theme) || null;
+
     const mergedTheme = {
-      id: (customTheme && customTheme.id) || 'nusantara',
-      name: (customTheme && customTheme.name) || 'Nusantara Klasik',
-      board: (customTheme && Array.isArray(customTheme.board) && customTheme.board.length === 40)
-        ? customTheme.board
+      id: (resolvedTheme && resolvedTheme.id) || 'nusantara',
+      name: (resolvedTheme && resolvedTheme.name) || 'Nusantara Klasik',
+      board: (resolvedTheme && Array.isArray(resolvedTheme.board) && resolvedTheme.board.length === 40)
+        ? resolvedTheme.board
         : DEFAULT_BOARD,
-      groups: (customTheme && customTheme.groups) ? Object.assign({}, DEFAULT_GROUPS, customTheme.groups) : DEFAULT_GROUPS,
-      economy: Object.assign({}, DEFAULT_ECONOMY, (customTheme && customTheme.economy) || {})
+      groups: (resolvedTheme && resolvedTheme.groups) ? Object.assign({}, DEFAULT_GROUPS, resolvedTheme.groups) : DEFAULT_GROUPS,
+      economy: Object.assign({}, DEFAULT_ECONOMY, (resolvedTheme && resolvedTheme.economy) || {})
     };
 
     const startCash = mergedTheme.economy.startCashBase;
 
-    const players = (playersList || []).map((p, idx) => ({
+    const players = extractedPlayers.map((p, idx) => ({
       id: p.id || `p_${idx + 1}`,
       name: p.name || `Warga ${idx + 1}`,
       color: p.color || ['#ef4444', '#3b82f6', '#22c55e', '#eab308'][idx % 4],
@@ -1236,6 +1261,9 @@
     getPinjolOffer,
     canPlayerRescueShortfall,
     createGame,
+    newGame: createGame,
+    initGame: createGame,
+    startGame: createGame,
     applyAction,
     chooseBotAction
   };
