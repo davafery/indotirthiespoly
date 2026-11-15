@@ -380,8 +380,8 @@
     const moveEv = Array.isArray(G.ev) ? G.ev.find(e => e.k === 'move') : null;
     const moveSteps = moveEv ? Math.abs(Number(moveEv.steps) || 6) : 0;
     const delayMs = hasRecentDice
-      ? Math.min(3800, 1300 + moveSteps * 150)
-      : (moveEv ? 1500 : 1050);
+      ? Math.min(4800, 2450 + moveSteps * 135)
+      : (moveEv ? 1750 : 1050);
 
     botTimer = setTimeout(() => {
       botTimer = null;
