@@ -55,6 +55,7 @@
   let pawnRings = {};
   let visualPos = {};
   let hopPhase = {};
+  let pawnMoveDelayUntil = {};
   let floatLabels = [];
 
   let diceRigs = [];
@@ -132,6 +133,7 @@
     pawnRings = {};
     visualPos = {};
     hopPhase = {};
+    pawnMoveDelayUntil = {};
     floatLabels = [];
     diceRigs = [];
     diceFocusUntil = 0;
@@ -818,7 +820,7 @@
       });
     });
 
-    diceFocusUntil = now + 1150;
+    diceFocusUntil = now + 900;
   }
 
   function ensurePawns3D(S) {
@@ -911,10 +913,14 @@
       lastProcessedSeq = S.evSeq;
       const now = performance.now();
       const hasDice = S.ev.some(e => e.k === 'dice');
-      const cashDelay = hasDice ? 950 : 250;
+      const moveEv = S.ev.find(e => e.k === 'move');
+      const steps = moveEv ? Math.abs(Number(moveEv.steps) || 0) : 0;
+      const cashDelay = hasDice ? (980 + Math.min(12, steps) * 115) : 300;
+
       for (const ev of S.ev) {
         if (ev.k === 'dice') {
           spawnDiceThrow3D(ev.dice, ev.pid);
+          pawnMoveDelayUntil[ev.pid] = now + 900;
         } else if (ev.k === 'cash' && ev.a !== 0) {
           spawnFloatingMoneyLabel(ev.pid, ev.a, ev.w, now, cashDelay);
         }
@@ -1032,15 +1038,20 @@
           if (diff < -20) diff += 40;
           if (diff > 20) diff -= 40;
 
+          const delayUntil = pawnMoveDelayUntil[p.id] || 0;
+          const waitingForDice = now < delayUntil;
+
           let hopY = 0;
-          if (Math.abs(diff) < 0.03) {
-            visualPos[p.id] = targetPos;
+          if (waitingForDice || Math.abs(diff) < 0.03) {
+            if (!waitingForDice) {
+              visualPos[p.id] = targetPos;
+            }
             hopPhase[p.id] = 0;
           } else {
-            const step = Math.sign(diff) * Math.min(Math.abs(diff), 0.22);
+            const step = Math.sign(diff) * Math.min(Math.abs(diff), 0.17);
             visualPos[p.id] = (cur + step + 40) % 40;
-            hopPhase[p.id] = (hopPhase[p.id] || 0) + 0.45;
-            hopY = Math.abs(Math.sin(hopPhase[p.id])) * 0.55;
+            hopPhase[p.id] = (hopPhase[p.id] || 0) + 0.42;
+            hopY = Math.abs(Math.sin(hopPhase[p.id])) * 0.58;
           }
 
           const wp = getWorldPosAtFloat(visualPos[p.id]);
