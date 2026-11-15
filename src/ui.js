@@ -693,7 +693,7 @@
     const isMyTurnToRoll = !holding && controlledSeat && G.phase === 'roll' && viewPlayer.jail === 0;
     const thinkingName = thinkingPid ? (G.players.find(p => p.id === thinkingPid)?.name || 'Bot') : '';
     const statusText = holding
-      ? `👀 Melihat pergerakan di papan...`
+      ? `👀 Melihat dadu & langkah di papan...`
       : (G.phase === 'gameover'
           ? 'Permainan Selesai'
           : (thinkingPid
@@ -1394,9 +1394,10 @@
 
     let delayMs = 0;
     if (hasDice) {
-      delayMs = Math.min(3600, Math.max(1850, 1050 + steps * 140));
+      // 2250ms untuk dadu berhenti + kamera berpindah ke karakter, ditambah waktu jalan per petak
+      delayMs = Math.min(4600, Math.max(2550, 2250 + steps * 130));
     } else if (moveEv) {
-      delayMs = Math.min(2400, Math.max(1000, 450 + steps * 140));
+      delayMs = Math.min(2600, Math.max(1150, 550 + steps * 130));
     } else if (Array.isArray(G.ev) && G.ev.some(e => ['card', 'decree', 'news', 'disaster', 'bankrupt', 'seized', 'election_result'].includes(e.k))) {
       delayMs = 650;
     }
