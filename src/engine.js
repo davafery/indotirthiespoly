@@ -1,13 +1,19 @@
 (function (root, factory) {
+  const api = factory();
   if (typeof module === 'object' && module.exports) {
-    module.exports = factory();
-  } else {
-    root.KonohapolyEngine = factory();
+    module.exports = api;
+  }
+  if (root) {
+    root.KonohapolyEngine = api;
+    root.Engine = root.Engine || api;
+    root.GameEngine = root.GameEngine || api;
   }
 }(typeof globalThis !== 'undefined' ? globalThis : this, function () {
   'use strict';
 
   const LVL_NAMES = ['Tanah Kosong', 'Rumah', 'Ruko', 'Landmark'];
+  const PLAYER_COLORS = ['#ef4444', '#3b82f6', '#22c55e', '#eab308'];
+  const BOT_NAMES = ['Bot Pak RT', 'Bot Bu Lurah', 'Bot Kang Parkir', 'Bot Sultan KW'];
 
   const DEFAULT_GROUPS = {
     coklat: { name: 'Pinggiran Kota', color: '#92400e' },
@@ -260,7 +266,7 @@
     const players = extractedPlayers.map((p, idx) => ({
       id: p.id || `p_${idx + 1}`,
       name: p.name || `Warga ${idx + 1}`,
-      color: p.color || ['#ef4444', '#3b82f6', '#22c55e', '#eab308'][idx % 4],
+      color: p.color || PLAYER_COLORS[idx % PLAYER_COLORS.length],
       isBot: Boolean(p.isBot),
       pos: 0,
       cash: startCash,
@@ -277,6 +283,9 @@
     }));
 
     return {
+      status: 'playing',
+      started: true,
+      board: mergedTheme.board,
       players,
       turnIdx: 0,
       round: 1,
@@ -1248,6 +1257,8 @@
 
   return {
     LVL_NAMES,
+    PLAYER_COLORS,
+    BOT_NAMES,
     formatMoney,
     calcMoney,
     calcTilePrice,
