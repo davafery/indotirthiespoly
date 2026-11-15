@@ -320,6 +320,12 @@
     }
 
     if (room.status === 'waiting') {
+      stopBackgroundTimers();
+      clearVisualHold();
+      resetPowerState();
+      activeModalHtml = '';
+      isAssetsModalOpen = false;
+      lastShownEventSeq = -1;
       renderWaitingRoom(room);
     } else {
       renderGameScreen(room, thinkingPid);
@@ -340,7 +346,7 @@
               <span class="kp-badge">LOBBY ROOM</span>
               <h2 class="kp-mt-sm">${esc(room.name)}</h2>
             </div>
-            <button id="kp-leave-room" type="button" class="kp-btn kp-btn-danger kp-btn-sm">Keluar</button>
+            <button id="kp-leave-room" type="button" class="kp-btn kp-btn-danger kp-btn-sm">Keluar ke Lobi</button>
           </div>
 
           ${isHost && idleSec >= 40 ? `
@@ -491,8 +497,64 @@
     return false;
   }
 
+  function openExitChoiceModal(isGameOver) {
+    isAssetsModalOpen = false;
+    Sound.play('click');
+
+    openCustomOverlay(`
+      <div class="kp-backdrop" id="kp-exit-backdrop">
+        <div class="kp-modal kp-center-text">
+          <div class="kp-badge">${isGameOver ? 'PERMAINAN SELESAI' : 'KONFIRMASI KELUAR'}</div>
+          <h3 class="kp-mt-sm">Mau keluar ke mana?</h3>
+          <p class="kp-muted kp-sm kp-mt-sm">
+            ${isGameOver
+              ? 'Pilih kembali ke ruang tunggu room untuk main lagi, atau keluar ke lobi utama.'
+              : 'Kembali ke ruang tunggu akan mereset permainan saat ini untuk room ini.'}
+          </p>
+          <div class="kp-stack kp-mt">
+            <button id="kp-exit-waiting" type="button" class="kp-btn kp-btn-primary">🪑 Ke Ruang Tunggu Room</button>
+            <button id="kp-exit-lobby" type="button" class="kp-btn kp-btn-danger">🏠 Keluar ke Lobi</button>
+            ${!isGameOver ? `<button id="kp-exit-cancel" type="button" class="kp-btn kp-btn-ghost">Lanjut Bermain</button>` : ''}
+          </div>
+        </div>
+      </div>
+    `);
+
+    document.getElementById('kp-exit-waiting').addEventListener('click', () => {
+      Sound.play('click');
+      closeCustomOverlay();
+      if (!Net.returnToWaitingRoom()) {
+        showLobby();
+      }
+    });
+
+    document.getElementById('kp-exit-lobby').addEventListener('click', () => {
+      Sound.play('click');
+      Net.leaveRoom();
+      showLobby();
+    });
+
+    const cancelBtn = document.getElementById('kp-exit-cancel');
+    if (cancelBtn) {
+      cancelBtn.addEventListener('click', () => {
+        Sound.play('click');
+        closeCustomOverlay();
+      });
+    }
+
+    const backdrop = document.getElementById('kp-exit-backdrop');
+    if (backdrop && !isGameOver) {
+      backdrop.addEventListener('click', e => {
+        if (e.target && e.target.id === 'kp-exit-backdrop') {
+          closeCustomOverlay();
+        }
+      });
+    }
+  }
+
   function renderGameScreen(room, thinkingPid) {
     const G = room.game;
+    if (!G) return;
     const user = Net.getUser() || Net.login('Warga +62');
     const myPrimarySeat = room.seats.find(s => s.player && s.player.uid === user.uid && !s.player.isLocal);
     const controlledSeat = getControlledSeatForTurn(room);
@@ -605,10 +667,7 @@
       openRulesModal();
     });
     document.getElementById('kp-ingame-exit').addEventListener('click', () => {
-      if (confirm('Keluar dari permainan ini?')) {
-        Net.leaveRoom();
-        showLobby();
-      }
+      openExitChoiceModal(G.phase === 'gameover');
     });
 
     updateChatMessagesDOM(room);
@@ -904,11 +963,21 @@
             <div class="kp-badge">PERMAINAN SELESAI · PUTARAN ${G.round}</div>
             <h2 class="kp-mt-sm">🏆 ${winner ? esc(winner.name) : 'Tidak Ada'} Bertahan Hidup!</h2>
             <p class="kp-muted kp-mt-sm">Sisa kas: <strong>${winner ? SafeEngine.formatMoney(winner.cash) : 'Rp0'}</strong></p>
-            <button id="kp-back-lobby" type="button" class="kp-btn kp-btn-primary kp-mt">Kembali ke Lobby</button>
+            <div class="kp-stack kp-mt">
+              <button id="kp-go-waiting" type="button" class="kp-btn kp-btn-primary">🪑 Ke Ruang Tunggu Room</button>
+              <button id="kp-back-lobby" type="button" class="kp-btn kp-btn-danger">🏠 Keluar ke Lobi</button>
+            </div>
           </div>
         </div>
       `;
+      document.getElementById('kp-go-waiting').addEventListener('click', () => {
+        Sound.play('click');
+        if (!Net.returnToWaitingRoom()) {
+          showLobby();
+        }
+      });
       document.getElementById('kp-back-lobby').addEventListener('click', () => {
+        Sound.play('click');
         Net.leaveRoom();
         showLobby();
       });
@@ -1325,7 +1394,7 @@
 
     let delayMs = 0;
     if (hasDice) {
-      delayMs = Math.min(3400, Math.max(1650, 950 + steps * 155));
+      delayMs = Math.min(3600, Math.max(1850, 1050 + steps * 140));
     } else if (moveEv) {
       delayMs = Math.min(2400, Math.max(1000, 450 + steps * 140));
     } else if (Array.isArray(G.ev) && G.ev.some(e => ['card', 'decree', 'news', 'disaster', 'bankrupt', 'seized', 'election_result'].includes(e.k))) {
