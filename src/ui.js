@@ -31,8 +31,14 @@
     calcAssetValue: (G, idx) => (Engine && Engine.calcAssetValue ? Engine.calcAssetValue(G, idx) : SafeEngine.calcTilePrice(G, idx)),
     calcMortgageValue: (G, idx) => (Engine && Engine.calcMortgageValue ? Engine.calcMortgageValue(G, idx) : Math.round(SafeEngine.calcTilePrice(G, idx) * 0.5)),
     calcRedeemCost: (G, idx) => (Engine && Engine.calcRedeemCost ? Engine.calcRedeemCost(G, idx) : Math.round(SafeEngine.calcTilePrice(G, idx) * 0.55)),
-    calcSellBuildingValue: (G, idx) => (Engine && Engine.calcSellBuildingValue ? Engine.calcSellBuildingValue(G, idx) : Math.round(SafeEngine.calcTilePrice(G, idx) * 0.35)),
-    calcSellTileValue: (G, idx) => (Engine && Engine.calcSellTileValue ? Engine.calcSellTileValue(G, idx) : Math.round(SafeEngine.calcTilePrice(G, idx) * 0.6))
+    calcSellBuildingValue: (G, idx) => (Engine && Engine.calcSellBuildingValue ? Engine.calcSellBuildingValue(G, idx) : Math.round(SafeEngine.calcTilePrice(G, idx) * 0.5)),
+    calcSellTileValue: (G, idx) => (Engine && Engine.calcSellTileValue ? Engine.calcSellTileValue(G, idx) : Math.round(SafeEngine.calcTilePrice(G, idx) * 0.6)),
+    getPinjolOffer: (G, shortfall) => {
+      if (Engine && Engine.getPinjolOffer) return Engine.getPinjolOffer(G, shortfall);
+      const principal = Math.max(shortfall + SafeEngine.calcMoney(G, 1000000), SafeEngine.calcMoney(G, 4000000));
+      const totalDebt = Math.round(principal * 1.5);
+      return { principal, totalDebt, installmentsCount: 3, installmentAmt: Math.ceil(totalDebt / 3) };
+    }
   };
 
   const Sound = {
@@ -80,6 +86,7 @@
   let rollSubmitting = false;
   let voteSelection = 0;
   let voteFajar = 0;
+  let selectedPinjolPlan = 'installment';
 
   let visualHoldUntil = 0;
   let visualHoldTimer = null;
@@ -621,7 +628,7 @@
             seat && seat.player && seat.player.afk ? '💤' : '',
             p.jail > 0 ? '🔒' : '',
             p.jailCards > 0 ? '🎫' : '',
-            p.pinjolDebt > 0 ? '📱' : ''
+            p.pinjolDebt > 0 ? (p.pinjolPlan === 'installment' ? '📱📅' : '📱') : ''
           ].filter(Boolean).join('');
           const isTurn = activePlayer && activePlayer.id === p.id && G.phase !== 'gameover';
           return `
@@ -684,6 +691,12 @@
     if (G.decree) pills.push(`<span class="kp-pill kp-pill-yellow">${G.decree.icon} Dekret: ${esc(G.decree.title)} (${G.decree.roundsLeft} putaran)</span>`);
     if (G.policy) pills.push(`<span class="kp-pill kp-pill-blue">${G.policy.icon} Kebijakan: ${esc(G.policy.title)} (${G.policy.roundsLeft} putaran)</span>`);
     if (G.disaster) pills.push(`<span class="kp-pill kp-pill-orange">${G.disaster.icon} ${esc(G.disaster.title)} (${G.disaster.roundsLeft} putaran)</span>`);
+    if (viewPlayer && viewPlayer.pinjolDebt > 0) {
+      const planLabel = viewPlayer.pinjolPlan === 'installment'
+        ? `Cicil ${SafeEngine.formatMoney(viewPlayer.pinjolInstallment)}/START (${viewPlayer.pinjolInstallmentsLeft}× lagi)`
+        : `Bayar Lunas ${SafeEngine.formatMoney(viewPlayer.pinjolDebt)} saat lewat START`;
+      pills.push(`<span class="kp-pill kp-pill-orange">📱 Utang Pinjol: ${SafeEngine.formatMoney(viewPlayer.pinjolDebt)} · ${planLabel}</span>`);
+    }
     pillBar.innerHTML = pills.join('');
 
     processNewEvents(room, viewPlayerId);
@@ -947,6 +960,183 @@
     btn.addEventListener('pointerdown', startHold);
   }
 
+  function renderShortfallModal(room, controlledSeat) {
+    const G = room.game;
+    const layer = document.getElementById('kp-modal-layer');
+    const pend = G.pending;
+    const me = G.players.find(p => p.id === controlledSeat.player.id);
+    if (!layer || !pend || !me) return;
+
+    const shortfall = Math.max(0, pend.amount - me.cash);
+    const hasEnough = me.cash >= pend.amount;
+
+    const owned = G.tiles
+      .map((ts, idx) => ({ ts, tile: G.theme.board[idx], idx }))
+      .filter(x => x.ts.owner === me.id && (x.ts.level > 0 || x.ts.mortgaged === 0));
+
+    const canPinjol = !me.pinjolUsed && !pend.isPinjolRepay;
+    const offer = canPinjol ? SafeEngine.getPinjolOffer(G, shortfall) : null;
+
+    const assetRowsHtml = owned.length === 0
+      ? `<p class="kp-muted kp-xs">Tidak ada aset yang bisa digadai atau dijual saat ini.</p>`
+      : owned.map(({ ts, tile, idx }) => {
+          const sellBldgVal = SafeEngine.calcSellBuildingValue(G, idx);
+          const sellTileVal = SafeEngine.calcSellTileValue(G, idx);
+          const pawnVal = SafeEngine.calcMortgageValue(G, idx);
+          const grpColor = tile.group && G.theme.groups[tile.group] ? G.theme.groups[tile.group].color : '#64748b';
+
+          return `
+            <div class="kp-asset-row" style="border-left: 4px solid ${esc(grpColor)}">
+              <div>
+                <strong>${esc(tile.name)}</strong>
+                <div class="kp-muted kp-xs">${LVL_NAMES[ts.level] || 'Tanah'}</div>
+              </div>
+              <div class="kp-row kp-wrap">
+                ${ts.level > 0 ? `
+                  <button type="button" class="kp-btn kp-btn-xs kp-btn-warn" data-sf-act="sellBuilding" data-tile="${idx}">
+                    Jual Bangunan (+${SafeEngine.formatMoney(sellBldgVal)})
+                  </button>
+                ` : `
+                  <button type="button" class="kp-btn kp-btn-xs kp-btn-ghost" data-sf-act="mortgage" data-tile="${idx}">
+                    Gadai (+${SafeEngine.formatMoney(pawnVal)})
+                  </button>
+                  <button type="button" class="kp-btn kp-btn-xs kp-btn-danger" data-sf-act="sellTile" data-tile="${idx}">
+                    Jual Tanah (+${SafeEngine.formatMoney(sellTileVal)})
+                  </button>
+                `}
+              </div>
+            </div>
+          `;
+        }).join('');
+
+    const pinjolSectionHtml = canPinjol && offer ? `
+      <div class="kp-fajar-box kp-mt">
+        <div class="kp-row-between">
+          <strong>📱 Pinjol Darurat (1× Seumur Hidup)</strong>
+          <span class="kp-badge">Cair +${SafeEngine.formatMoney(offer.principal)}</span>
+        </div>
+        <p class="kp-muted kp-xs kp-mt-sm">
+          Total tagihan <strong>${SafeEngine.formatMoney(offer.totalDebt)}</strong> (150%). Pilih cara pelunasan saat melewati START:
+        </p>
+        <div class="kp-stack kp-mt-sm">
+          <label class="kp-radio-card ${selectedPinjolPlan === 'installment' ? 'kp-selected' : ''}">
+            <input type="radio" name="kp_pinjol_plan" value="installment" ${selectedPinjolPlan === 'installment' ? 'checked' : ''} />
+            <div>
+              <strong>📅 Dicicil 3× tiap Lewati START</strong>
+              <div class="kp-muted kp-xs">Potong <strong>${SafeEngine.formatMoney(offer.installmentAmt)}</strong> setiap melewati START (3 kali).</div>
+            </div>
+          </label>
+          <label class="kp-radio-card ${selectedPinjolPlan === 'lump' ? 'kp-selected' : ''}">
+            <input type="radio" name="kp_pinjol_plan" value="lump" ${selectedPinjolPlan === 'lump' ? 'checked' : ''} />
+            <div>
+              <strong>⚡ Bayar Sekali saat Lewati START</strong>
+              <div class="kp-muted kp-xs">Bayar lunas <strong>${SafeEngine.formatMoney(offer.totalDebt)}</strong> sekaligus saat lewat START berikutnya.</div>
+            </div>
+          </label>
+        </div>
+        <button id="kp-sf-pinjol" type="button" class="kp-btn kp-btn-warn kp-full kp-mt-sm">
+          💸 Cairkan Pinjol (${selectedPinjolPlan === 'installment' ? 'Dicicil 3×' : 'Bayar Sekali'})
+        </button>
+      </div>
+    ` : (pend.isPinjolRepay
+      ? `<p class="kp-muted kp-xs kp-mt-sm">💡 Uang tunai tidak cukup untuk melunasi tagihan pinjol saat melewati START. Gadai atau jual asetmu agar bisa melunasinya.</p>`
+      : `<p class="kp-muted kp-xs kp-mt-sm">📵 Kuota Pinjol Darurat sudah terpakai.</p>`);
+
+    layer.innerHTML = `
+      <div class="kp-backdrop">
+        <div class="kp-modal" style="max-height:88vh;overflow-y:auto;">
+          <div class="kp-badge kp-badge-red">⚠️ KAS TIDAK CUKUP · ${esc(me.name).toUpperCase()}</div>
+          <h3 class="kp-mt-sm">${esc(pend.reason)}</h3>
+
+          <div class="kp-kv-list kp-mt-sm">
+            <div><span>Total Tagihan Wajib</span><strong>${SafeEngine.formatMoney(pend.amount)}</strong></div>
+            <div><span>Uang Tunai Saat Ini</span><strong class="${hasEnough ? 'kp-green' : ''}">${SafeEngine.formatMoney(me.cash)}</strong></div>
+            <div>
+              <span>Status</span>
+              <strong style="color:${hasEnough ? '#4ade80' : '#f87171'}">
+                ${hasEnough ? '✅ Dana Sudah Cukup!' : `Kurang ${SafeEngine.formatMoney(shortfall)}`}
+              </strong>
+            </div>
+          </div>
+
+          <button id="kp-sf-pay" type="button" class="kp-btn kp-btn-primary kp-full kp-mt" ${hasEnough ? '' : 'disabled'}>
+            ✅ Bayar Tagihan (${SafeEngine.formatMoney(pend.amount)}) & Lanjutkan
+          </button>
+
+          ${!hasEnough ? `
+            <div class="kp-mt">
+              <strong class="kp-sm">🏚️ Pilih Gadai atau Jual Aset:</strong>
+              <div class="kp-stack kp-mt-sm">${assetRowsHtml}</div>
+            </div>
+            ${pinjolSectionHtml}
+          ` : ''}
+
+          ${!hasEnough && owned.length === 0 && !canPinjol ? `
+            <button id="kp-sf-bankrupt" type="button" class="kp-btn kp-btn-danger kp-full kp-mt">
+              🏳️ Nyatakan Bangkrut
+            </button>
+          ` : ''}
+        </div>
+      </div>
+    `;
+
+    document.getElementById('kp-sf-pay').addEventListener('click', () => {
+      if (me.cash < pend.amount) return;
+      Sound.play('cash_out');
+      Net.op(room.id, 'act', {
+        actorId: me.id,
+        action: { type: 'decide', choice: 'pay' }
+      });
+    });
+
+    layer.querySelectorAll('[data-sf-act]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        Sound.play('cash_in');
+        Net.op(room.id, 'act', {
+          actorId: me.id,
+          action: {
+            type: 'decide',
+            choice: btn.getAttribute('data-sf-act'),
+            tile: Number(btn.getAttribute('data-tile'))
+          }
+        });
+      });
+    });
+
+    layer.querySelectorAll('input[name="kp_pinjol_plan"]').forEach(inp => {
+      inp.addEventListener('change', () => {
+        selectedPinjolPlan = inp.value;
+        renderShortfallModal(room, controlledSeat);
+      });
+    });
+
+    const pinjolBtn = document.getElementById('kp-sf-pinjol');
+    if (pinjolBtn) {
+      pinjolBtn.addEventListener('click', () => {
+        Sound.play('cash_in');
+        Net.op(room.id, 'act', {
+          actorId: me.id,
+          action: {
+            type: 'decide',
+            choice: 'pinjol',
+            plan: selectedPinjolPlan
+          }
+        });
+      });
+    }
+
+    const bankruptBtn = document.getElementById('kp-sf-bankrupt');
+    if (bankruptBtn) {
+      bankruptBtn.addEventListener('click', () => {
+        Sound.play('bankrupt');
+        Net.op(room.id, 'act', {
+          actorId: me.id,
+          action: { type: 'decide', choice: 'bankrupt' }
+        });
+      });
+    }
+  }
+
   function renderActivePhaseModal(room, controlledSeat) {
     if (isVisualHolding()) return;
     const G = room.game;
@@ -1093,6 +1283,12 @@
       activeModalHtml = '';
       isAssetsModalOpen = false;
       const pend = G.pending;
+
+      if (pend.kind === 'shortfall') {
+        renderShortfallModal(room, controlledSeat);
+        return;
+      }
+
       const me = G.players.find(p => p.id === controlledSeat.player.id);
       const tile = pend.tile !== undefined ? G.theme.board[pend.tile] : null;
       let title = '';
@@ -1139,7 +1335,7 @@
         `;
       } else if (pend.kind === 'pejabat') {
         title = '💼 Kantor Pejabat';
-        desc = 'Setor upeti: 55% menang tender (+Rp20jt × inflasi), 25% zonk, 20% kena OTT!';
+        desc = 'Setor upeti: 55% menang tender (+Rp10jt × inflasi), 25% zonk, 20% kena OTT!';
         buttonsHtml = `
           <button type="button" class="kp-btn kp-btn-warn" data-dec="tribute" ${me.cash < pend.cost ? 'disabled' : ''}>🤝 Setor Upeti (${SafeEngine.formatMoney(pend.cost)})</button>
           <button type="button" class="kp-btn kp-btn-ghost" data-dec="leave">Pulang Saja</button>
@@ -1241,7 +1437,7 @@
         </div>`
       : `<div class="kp-muted kp-xs kp-mt-sm" style="background:var(--kp-surface-2);padding:7px 10px;border-radius:8px;">
           ${isMySeat
-            ? '👁️ Mode pantau — jual aset, gadai, atau tebus bisa dilakukan saat giliranmu melempar dadu.'
+            ? '👁️ Mode pantau — jual aset, gadai, atau tebus bisa dilakukan saat giliranmu melempar dadu atau saat butuh dana tambahan.'
             : `👁️ Melihat daftar aset milik ${esc(targetPlayer.name)} (Total nilai: ${SafeEngine.formatMoney(totalAssetVal)}).`}
         </div>`;
 
@@ -1366,10 +1562,10 @@
           <ul class="kp-rules-list kp-mt">
             <li><strong>Tujuan:</strong> Bertahan hidup paling akhir! Bukan menjadi yang paling kaya.</li>
             <li><strong>Inflasi & Aset vs Tunai:</strong> Saldo uang tunai tidak ikut naik saat inflasi naik, sedangkan harga tanah, harga jual aset, dan tarif sewa ikut naik sesuai inflasi.</li>
+            <li><strong>Saat Kekurangan Uang Tunai:</strong> Kamu bisa memilih sendiri untuk <strong>Gadai Tanah</strong>, <strong>Jual Bangunan/Tanah</strong>, atau mengajukan <strong>Pinjol Darurat</strong> (1× seumur hidup).</li>
+            <li><strong>Pinjol Darurat (150%):</strong> Bisa dipilih untuk <strong>Dicicil 3×</strong> tiap lewat START atau <strong>Bayar Sekali</strong> saat lewat START berikutnya. Jika saat lewat START uang tunai masih kurang, kamu tetap bisa menjual atau menggadaikan asetmu untuk melunasinya.</li>
             <li><strong>Beli & Bangun per Kunjungan:</strong> Hanya bisa beli saat mendarat, dan naik 1 level (Rumah → Ruko → Landmark) saat mendarat lagi di tanah sendiri.</li>
             <li><strong>Takeover:</strong> Setelah bayar sewa di properti lawan (bukan Landmark & tidak digadai), boleh ambil alih seharga 2× nilai aset berinflasi.</li>
-            <li><strong>Jual & Gadai Aset:</strong> Bisa jual tanah (+60%), jual bangunan (+50%), atau gadai (+50%, tebus 55% dalam 4 putaran).</li>
-            <li><strong>Pinjol Darurat:</strong> Otomatis cair sekali seumur hidup jika kas habis, ditagih 150% saat lewat START berikutnya.</li>
             <li><strong>Krisis Moneter:</strong> Mulai putaran 40, inflasi melonjak +100% per putaran dan taksiran Pegadaian dibekukan.</li>
           </ul>
         </div>
@@ -1394,7 +1590,6 @@
 
     let delayMs = 0;
     if (hasDice) {
-      // 2250ms untuk dadu berhenti + kamera berpindah ke karakter, ditambah waktu jalan per petak
       delayMs = Math.min(4600, Math.max(2550, 2250 + steps * 130));
     } else if (moveEv) {
       delayMs = Math.min(2600, Math.max(1150, 550 + steps * 130));
@@ -1562,10 +1757,11 @@
       return;
     }
 
-    const key = `${room.ver}_${G.phase}_${controlledSeat.player.id}`;
+    const phaseSub = G.pending ? G.pending.kind : '';
+    const key = `${room.ver}_${G.phase}_${phaseSub}_${controlledSeat.player.id}`;
     if (key !== turnTimerKey) {
       turnTimerKey = key;
-      const limitSec = G.phase === 'roll' ? 35 : (G.phase === 'decide' ? 40 : 30);
+      const limitSec = G.phase === 'roll' ? 35 : (G.phase === 'decide' ? (phaseSub === 'shortfall' ? 60 : 40) : 30);
       turnDeadline = Date.now() + limitSec * 1000;
     }
 
